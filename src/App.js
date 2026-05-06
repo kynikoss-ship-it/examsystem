@@ -1,20 +1,84 @@
+고사 현황 대시보드 배포 가이드 (CodeSandbox 파일 수정 방식)
+
+첨부하신 CodeSandbox 'React' 템플릿 환경(공개/ 및 src/ 폴더 구조)에 맞춘 직관적인 파일 설정 가이드입니다.
+
+1. 패키지(Dependencies) 설치
+
+좌측 탐색 창 하단의 Dependencies 입력란에 아래 2가지 패키지를 검색하여 클릭(추가)합니다.
+
+firebase
+
+lucide-react
+(※ Tailwind CSS는 충돌 방지를 위해 아래 index.html 단계에서 CDN 방식으로 처리합니다.)
+
+2. 파일별 코드 수정 내역
+
+기존 생성되어 있는 파일들의 내용을 모두 지우고, 아래 제공된 코드로 덮어씁니다.
+
+① 공개/index.html
+
+Tailwind CSS 스크립트를 추가하여 스타일이 정상적으로 렌더링되도록 합니다.
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>고사 현황 대시보드</title>
+  <!-- Tailwind CSS CDN (CodeSandbox 환경 빌드 오류 방지용) -->
+  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+</head>
+<body>
+  <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>
+  <div id="root"></div>
+</body>
+</html>
+
+
+② src/index.js
+
+React 애플리케이션을 HTML의 root 요소에 연결하는 진입점 파일입니다. (기본값과 동일하나 확인용으로 덮어씁니다.)
+
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles.css";
+
+const rootElement = document.getElementById("root");
+const root = createRoot(rootElement);
+
+root.render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+
+
+③ src/styles.css
+
+Tailwind를 CDN으로 처리했으므로 복잡한 설정 없이 기본 여백 초기화만 남깁니다.
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+④ src/App.js (또는 App.jsx)
+
+가장 핵심이 되는 메인 화면 코드입니다. 질문자님께서 제공해주신 Firebase Config를 반영하여 중복 선언 문제를 해결한 버전입니다. 파일 전체를 아래 코드로 덮어쓰기 하십시오.
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings, MonitorPlay, Users, AlertCircle, Lock, X, Trash2, Plus, Cloud, CloudOff, Send } from 'lucide-react';
+import { 설정, MonitorPlay, 사용자, AlertCircle, Lock, X, Trash2, Plus, Cloud, CloudOff, 보내기 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // ==========================================
-// [필수 수정 사항] 본인의 Firebase Config 값으로 교체하세요.
+// Firebase 설정 및 초기화 영역
 // ==========================================
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
   authDomain: "exam-system-9bcd7.firebaseapp.com",
@@ -25,16 +89,13 @@ const firebaseConfig = {
   measurementId: "G-36DXM2SY8N"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "school-exam-dashboard"; 
 // ==========================================
 
-export default function App() {
+export 기본 function App() {
   // --- Auth & Sync State ---
   const [user, setUser] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -158,7 +219,7 @@ export default function App() {
 
   // --- Handlers ---
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.파일[0];
     if (!file) return;
 
     setUploadStatus('업로드 중...');
@@ -425,7 +486,7 @@ export default function App() {
          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex-1 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
-              <Users size={16} /> 결시자 명단
+              <사용자 size={16} /> 결시자 명단
             </h3>
             <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
               {localConfig.grade}학년 {localConfig.class}반
@@ -475,7 +536,7 @@ export default function App() {
         <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">1. 학생 명렬표 CSV 업로드 (전교 원본 데이터 교체)</h2>
         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
           <input 
-            type="file" 
+            입력="file" 
             accept=".csv"
             onChange={handleFileUpload}
             className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -590,7 +651,7 @@ export default function App() {
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2 flex-1 overflow-hidden">
                       <input 
-                        type="checkbox" 
+                        입력="checkbox" 
                         id={`absent-${student.id}`}
                         checked={student.isAbsent}
                         onChange={() => toggleAbsence(student.id)}
@@ -604,7 +665,7 @@ export default function App() {
                         {/* 이름 수정 영역 */}
                         {editingStudentId === student.id ? (
                           <input
-                            type="text"
+                            입력="text"
                             value={student.name}
                             onChange={(e) => handleNameChange(student.id, e.target.value)}
                             onBlur={handleNameSave}
@@ -681,7 +742,7 @@ export default function App() {
                 disabled={!adminGlobalAnnInput.trim()}
                 className="bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-bold px-6 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors"
               >
-                <Send size={20} />
+                <보내기 size={20} />
                 <span>전체 적용</span>
               </button>
             </div>
@@ -701,7 +762,7 @@ export default function App() {
                 {['1', '2', '3'].map(g => (
                   <label key={`target-${g}`} className="flex items-center gap-1 cursor-pointer">
                     <input 
-                      type="checkbox" 
+                      입력="checkbox" 
                       checked={targetGrades.includes(g)}
                       onChange={() => toggleTargetGrade(g)}
                       className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
@@ -724,7 +785,7 @@ export default function App() {
                 disabled={targetGrades.length === 0 || !adminGradeAnnInput.trim()}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold px-6 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors"
               >
-                <Send size={20} />
+                <보내기 size={20} />
                 <span>선택 적용</span>
               </button>
             </div>
@@ -837,7 +898,7 @@ export default function App() {
             onClick={handleAdminClick}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'admin' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
           >
-            <Settings size={16} /> 관리자
+            <설정 size={16} /> 관리자
           </button>
         </div>
       </header>
@@ -861,7 +922,7 @@ export default function App() {
             <form onSubmit={handlePasswordSubmit} className="p-6">
               <p className="text-sm text-slate-600 mb-4">관리자 페이지에 접근하려면 비밀번호를 입력하세요.</p>
               <input
-                type="password"
+                입력="password"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="비밀번호"
@@ -870,7 +931,7 @@ export default function App() {
               />
               {authError && <p className="text-xs text-red-500 mb-4">{authError}</p>}
               <button
-                type="submit"
+                입력="submit"
                 className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-slate-700 transition-colors mt-2"
               >
                 확인
