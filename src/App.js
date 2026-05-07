@@ -4,9 +4,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
-// ==========================================
-// Firebase 설정 (질문자님 프로젝트 정보)
-// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
   authDomain: "exam-system-9bcd7.firebaseapp.com",
@@ -57,7 +54,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error("인증 에러:", err));
+    signInAnonymously(auth).catch(err => console.error(err));
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
@@ -76,8 +73,6 @@ export default function App() {
         if (data.gradeData) {
           setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
         }
-      } else {
-        setDoc(globalRef, { globalConfig, gradeData: defaultGradeData, globalAnnouncement: '', studentDirectory: {} }, { merge: true });
       }
       setIsSyncing(false);
     });
@@ -205,47 +200,76 @@ export default function App() {
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (passwordInput === '3328') { setIsAuthenticated(true); setShowAuthModal(false); setView('admin'); }
-    else setAuthError('틀렸습니다.');
+    else setAuthError('오답');
   };
 
   const renderDashboard = () => (
     <div className="grid grid-cols-12 gap-4 flex-1">
       <div className="col-span-9 flex flex-col gap-4">
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="grid grid-cols-12 bg-slate-100 text-slate-600 font-medium text-sm border-b p-2">
+        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden">
+          <div className="grid grid-cols-12 bg-slate-800 text-slate-400 font-bold text-sm border-b border-slate-700 p-2">
             <div className="col-span-2 text-center">교시</div>
             <div className="col-span-6 text-center">과목 (코드)</div>
             <div className="col-span-4 text-center">시간</div>
           </div>
           {currentGradeSchedule.map((item) => (
-            <div key={item.id} className={`grid grid-cols-12 items-center border-b p-4 ${item.period.toString() === globalConfig.period ? 'bg-blue-50' : ''}`}>
-              <div className="col-span-2 text-center text-xl font-bold">{item.period}</div>
-              <div className="col-span-6 text-center text-2xl font-bold">{item.subject} <span className="text-slate-400">({item.code})</span></div>
-              <div className="col-span-4 text-center text-3xl font-bold text-blue-700">{item.time}</div>
+            <div key={item.id} className={`grid grid-cols-12 items-center border-b border-slate-800/50 p-5 ${item.period.toString() === globalConfig.period ? 'bg-blue-900/30' : ''}`}>
+              <div className="col-span-2 text-center text-2xl font-black text-slate-500">{item.period}</div>
+              <div className="col-span-6 text-center text-3xl font-bold text-slate-100">{item.subject} <span className="text-slate-500 text-xl font-medium">({item.code})</span></div>
+              <div className="col-span-4 text-center text-4xl font-black text-blue-400 tracking-tighter">{item.time}</div>
             </div>
           ))}
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col gap-4">
-          <h3 className="font-bold text-slate-500 flex items-center gap-2"><AlertCircle size={18}/> 본부 전달사항</h3>
-          {globalAnnouncement && <div className="p-6 bg-red-50 border-red-100 border rounded-xl text-3xl font-bold">{globalAnnouncement}</div>}
-          {currentAnnouncement && <div className="p-6 bg-blue-50 border-blue-100 border rounded-xl text-3xl font-bold">{currentAnnouncement}</div>}
+        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-8 flex-1 flex flex-col gap-6">
+          <h3 className="font-black text-slate-500 text-lg flex items-center gap-2 uppercase tracking-widest"><AlertCircle size={24}/> 본부 전달사항</h3>
+          <div className="flex flex-col gap-4 flex-1 justify-center">
+            {globalAnnouncement && (
+              <div className="p-8 bg-red-950/40 border-l-8 border-red-600 rounded-r-2xl shadow-inner">
+                <span className="text-red-500 text-sm font-black mb-2 block tracking-widest uppercase">Global Notice</span>
+                <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{globalAnnouncement}</p>
+              </div>
+            )}
+            {currentAnnouncement && (
+              <div className="p-8 bg-blue-950/40 border-l-8 border-blue-600 rounded-r-2xl shadow-inner">
+                <span className="text-blue-500 text-sm font-black mb-2 block tracking-widest uppercase">{localConfig.grade} Grade Notice</span>
+                <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{currentAnnouncement}</p>
+              </div>
+            )}
+            {!globalAnnouncement && !currentAnnouncement && (
+              <div className="text-center text-slate-700 text-2xl font-bold italic">현재 전달사항이 없습니다.</div>
+            )}
+          </div>
         </div>
       </div>
       <div className="col-span-3 flex flex-col gap-4">
-        <div className="bg-white rounded-xl border p-4 flex gap-2 text-center text-xs">
-          <div className="flex-1 bg-slate-50 p-2 rounded">재적<br/><b className="text-xl">{stats.total}</b></div>
-          <div className="flex-1 bg-blue-50 p-2 rounded text-blue-700">응시<br/><b className="text-xl">{stats.present}</b></div>
-          <div className="flex-1 bg-red-50 p-2 rounded text-red-600">결시<br/><b className="text-xl">{stats.absent}</b></div>
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 flex gap-3 text-center">
+          <div className="flex-1 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+            <span className="text-[10px] text-slate-500 font-bold uppercase">재적</span>
+            <div className="text-3xl font-black text-slate-200">{stats.total}</div>
+          </div>
+          <div className="flex-1 bg-blue-900/20 p-3 rounded-lg border border-blue-900/50">
+            <span className="text-[10px] text-blue-500 font-bold uppercase">응시</span>
+            <div className="text-3xl font-black text-blue-400">{stats.present}</div>
+          </div>
+          <div className="flex-1 bg-red-900/20 p-3 rounded-lg border border-red-900/50">
+            <span className="text-[10px] text-red-500 font-bold uppercase">결시</span>
+            <div className="text-3xl font-black text-red-400">{stats.absent}</div>
+          </div>
         </div>
-        <div className="bg-white rounded-xl border p-5 flex-1 overflow-y-auto">
-          <h3 className="font-bold mb-4 flex items-center gap-2"><Users size={18}/> 결시자 명단</h3>
-          <div className="flex flex-col gap-2">
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 flex-1 overflow-y-auto">
+          <h3 className="font-black text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase"><Users size={20}/> Absentee List</h3>
+          <div className="flex flex-col gap-3">
             {students.filter(s => s.isAbsent).map(s => (
-              <div key={s.id} className="p-3 border rounded-lg flex justify-between bg-red-50 text-sm">
-                <span><b>{s.id}번</b> {s.name}</span>
-                <span className="text-red-600 font-bold">{s.absenceReason}</span>
+              <div key={s.id} className="p-4 border border-slate-800 rounded-xl flex justify-between items-center bg-slate-800/30">
+                <span className="text-lg font-bold text-slate-300">
+                  <span className="text-slate-600 mr-2">{s.id}</span> {s.name}
+                </span>
+                <span className="px-3 py-1 bg-red-900/40 text-red-400 rounded-full text-xs font-black ring-1 ring-red-500/30">{s.absenceReason}</span>
               </div>
             ))}
+            {students.filter(s => s.isAbsent).length === 0 && (
+              <div className="text-center py-10 text-slate-700 font-bold">결시자 없음</div>
+            )}
           </div>
         </div>
       </div>
@@ -253,45 +277,45 @@ export default function App() {
   );
 
   const renderAdmin = () => (
-    <div className="bg-white flex-1 rounded-xl border p-6 overflow-y-auto flex flex-col gap-8">
+    <div className="bg-slate-900 flex-1 rounded-xl border border-slate-800 p-8 overflow-y-auto flex flex-col gap-10 text-slate-200">
       <section>
-        <h2 className="font-bold border-b pb-2 mb-4 text-lg text-slate-800">1. 명렬표 CSV 업로드</h2>
-        <input type="file" accept=".csv" onChange={handleFileUpload} className="p-2 border rounded w-full bg-slate-50 text-sm" />
-        {uploadStatus && <p className="mt-2 text-blue-600 font-bold">{uploadStatus}</p>}
+        <h2 className="font-black border-b border-slate-800 pb-3 mb-6 text-xl text-blue-500 tracking-wider">1. 학생 명렬표 CSV 업로드</h2>
+        <input type="file" accept=".csv" onChange={handleFileUpload} className="p-4 border border-slate-800 rounded-xl w-full bg-slate-800/50 text-slate-400" />
+        {uploadStatus && <p className="mt-3 text-green-500 font-black flex items-center gap-2"><Cloud size={16}/> {uploadStatus}</p>}
       </section>
       <section>
-        <h2 className="font-bold border-b pb-2 mb-4 text-lg text-slate-800">2. 시간표 관리 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
-        <div className="grid grid-cols-1 gap-2">
+        <h2 className="font-black border-b border-slate-800 pb-3 mb-6 text-xl text-blue-500 tracking-wider">2. 시간표 관리 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
+        <div className="flex flex-col gap-3">
           {currentGradeSchedule.map(item => (
-            <div key={item.id} className="flex gap-2 items-center">
-              <span className="w-12 font-bold">{item.period}교시</span>
-              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1 text-sm" placeholder="과목" />
-              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded w-20 text-sm" placeholder="코드" />
-              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1 text-sm" placeholder="시간" />
+            <div key={item.id} className="flex gap-4 items-center bg-slate-800/30 p-3 rounded-xl border border-slate-800">
+              <span className="w-14 font-black text-slate-500">{item.period}교시</span>
+              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex-1 text-slate-100 font-bold" placeholder="과목" />
+              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg w-24 text-slate-100 text-center font-bold" placeholder="코드" />
+              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex-1 text-slate-100 text-center font-bold tracking-tighter" placeholder="시간" />
             </div>
           ))}
         </div>
       </section>
       <section>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-bold text-lg text-slate-800">3. 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
-          <div className="flex gap-2">
-            <button onClick={handleResetClassStudents} className="bg-red-50 text-red-700 p-2 rounded font-bold text-xs">명단 초기화</button>
-            <button onClick={handleAddStudent} className="bg-blue-600 text-white p-2 rounded font-bold text-xs">+ 추가</button>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="font-black text-xl text-blue-500 tracking-wider">3. 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
+          <div className="flex gap-3">
+            <button onClick={handleResetClassStudents} className="bg-red-900/30 text-red-400 px-4 py-2 rounded-xl font-black text-xs border border-red-900/50 hover:bg-red-900/50 transition-all">명단 초기화</button>
+            <button onClick={handleAddStudent} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-lg shadow-blue-900/40">+ 학생 추가</button>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-4">
           {students.map(s => (
-            <div key={s.id} className={`p-2 border rounded-xl ${s.isAbsent ? 'bg-red-50 border-red-200' : 'bg-slate-50'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-3 h-3" />
-                <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-bold text-xs truncate">
-                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="w-full border-b outline-none" /> : s.name}
+            <div key={s.id} className={`p-4 border rounded-2xl transition-all ${s.isAbsent ? 'bg-red-950/20 border-red-900/50' : 'bg-slate-800/40 border-slate-800'}`}>
+              <div className="flex items-center gap-3 mb-3">
+                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-5 h-5 rounded-md accent-blue-600" />
+                <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-black text-lg">
+                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="bg-transparent border-b-2 border-blue-500 w-full outline-none" /> : s.name}
                 </span>
-                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={12}/></button>
+                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-600 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
               </div>
               {s.isAbsent && (
-                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full border rounded p-1 text-[10px]">
+                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold text-slate-300 outline-none focus:border-red-500">
                   <option value="질병">질병</option><option value="인정">인정</option><option value="미인정">미인정</option><option value="기타">기타</option><option value="전출">전출</option><option value="위탁">위탁</option>
                 </select>
               )}
@@ -299,65 +323,74 @@ export default function App() {
           ))}
         </div>
       </section>
-      <section className="flex flex-col gap-4">
-        <h2 className="font-bold border-b pb-2 text-lg text-slate-800">4. 전달사항 송출</h2>
-        <div className="p-4 bg-red-50 rounded-xl">
-          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2 text-sm" placeholder="전체 공통 내용" />
-          <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg">전체 적용</button>
-        </div>
-        <div className="p-4 bg-blue-50 rounded-xl">
-          <div className="flex gap-4 mb-3">
-            {['1','2','3'].map(g => (
-              <label key={g} className="flex gap-1 items-center font-bold text-sm"><input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} />{g}학년</label>
-            ))}
+      <section className="flex flex-col gap-6">
+        <h2 className="font-black border-b border-slate-800 pb-3 text-xl text-blue-500 tracking-wider">4. 전달사항 송출</h2>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="p-6 bg-red-950/20 rounded-2xl border border-red-900/30">
+            <h3 className="text-red-500 font-black mb-4 flex items-center gap-2"><AlertCircle size={20}/> 전체 공통 내용</h3>
+            <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl h-32 mb-4 text-slate-100 outline-none focus:border-red-600 font-bold" placeholder="모든 학년에 표시됩니다." />
+            <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-red-600 text-white font-black py-4 rounded-xl shadow-lg shadow-red-950/50 active:scale-[0.98] transition-all">전체 학년 송출</button>
           </div>
-          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2 text-sm" placeholder="선택 학년 개별 내용" />
-          <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">선택 학년 적용</button>
+          <div className="p-6 bg-blue-950/20 rounded-2xl border border-blue-900/30">
+            <h3 className="text-blue-500 font-black mb-4 flex items-center gap-2"><Send size={20}/> 학년별 개별 내용</h3>
+            <div className="flex gap-4 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
+              {['1','2','3'].map(g => (
+                <label key={g} className="flex gap-2 items-center font-black text-slate-400 cursor-pointer hover:text-slate-100 transition-colors">
+                  <input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} className="w-4 h-4" />{g}학년
+                </label>
+              ))}
+            </div>
+            <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl h-32 mb-4 text-slate-100 outline-none focus:border-blue-600 font-bold" placeholder="선택한 학년에만 표시됩니다." />
+            <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-900/40 active:scale-[0.98] transition-all">선택 학년 송출</button>
+          </div>
         </div>
       </section>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 p-4 font-sans flex flex-col gap-4 overflow-hidden">
-      <header className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center shrink-0">
-        <div className="flex items-center gap-6">
-          <h1 className="text-xl font-black text-blue-800">고사 현황</h1>
-          <div className="flex gap-4 items-center bg-slate-50 p-2 rounded-xl border text-sm font-bold">
-            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent border-b border-blue-500 outline-none">
-              {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
+    <div className="min-h-screen bg-slate-950 text-slate-200 p-4 font-sans flex flex-col gap-4 overflow-hidden">
+      <header className="bg-slate-900 p-5 rounded-2xl shadow-2xl border border-slate-800 flex justify-between items-center shrink-0">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col">
+            <h1 className="text-2xl font-black text-slate-100 tracking-tighter leading-none">고사 상황판</h1>
+            <span className="text-[10px] font-bold text-blue-500 tracking-[0.3em] uppercase mt-1">Status Board</span>
+          </div>
+          <div className="flex gap-5 items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-xs font-black shadow-inner">
+            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
+              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}학년</option>)}
             </select>
-            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent border-b border-blue-500 outline-none">
-              {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
+            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
+              {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n} className="bg-slate-900">{n}반</option>)}
             </select>
-            일자 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 outline-none">
-              {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
+            일차 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
+              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}일차</option>)}
             </select>
-            교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 text-blue-600 outline-none">
-              {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
+            교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-400 border-b border-blue-500 outline-none font-black">
+              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}교시</option>)}
             </select>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setView('dashboard')} className={`px-6 py-2 rounded-xl font-bold transition-all ${view === 'dashboard' ? 'bg-slate-800 text-white shadow-lg' : 'bg-white border text-slate-500'}`}>대시보드</button>
-          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-6 py-2 rounded-xl font-bold transition-all ${view === 'admin' ? 'bg-slate-800 text-white shadow-lg' : 'bg-white border text-slate-500'}`}>관리자</button>
+        <div className="flex gap-3">
+          <button onClick={() => setView('dashboard')} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-100 text-slate-900 shadow-xl shadow-white/10' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>DASHBOARD</button>
+          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>ADMIN</button>
         </div>
       </header>
       {view === 'dashboard' ? renderDashboard() : renderAdmin()}
       {showAuthModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl">
-            <h3 className="text-2xl font-black mb-6 flex items-center gap-2"><Lock size={24}/> 관리자 인증</h3>
-            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
-              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full border-2 p-4 rounded-2xl text-center text-2xl tracking-widest outline-none focus:border-blue-500 transition-all" placeholder="비밀번호" autoFocus />
-              {authError && <p className="text-red-500 text-center font-bold">{authError}</p>}
-              <button type="submit" className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">확인</button>
-              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600">취소</button>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-3xl p-10 w-full max-w-sm shadow-2xl border border-slate-800">
+            <h3 className="text-3xl font-black text-slate-100 mb-6 flex items-center gap-2"><Lock size={24}/> Admin</h3>
+            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-6">
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full bg-slate-950 border-2 border-slate-800 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-blue-500 transition-all text-slate-100 font-black shadow-inner" placeholder="••••" autoFocus />
+              {authError && <p className="text-red-500 text-center font-black">틀렸습니다.</p>}
+              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-blue-900/40 active:scale-95 transition-all">인증</button>
+              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-600 font-black hover:text-slate-400">취소</button>
             </form>
           </div>
         </div>
       )}
-      {isSyncing && <div className="fixed bottom-6 right-6 bg-white/80 backdrop-blur px-4 py-2 rounded-full border shadow-xl text-[10px] font-bold flex items-center gap-2 text-blue-600 animate-pulse"><Cloud size={14}/> 실시간 동기화 중...</div>}
+      {isSyncing && <div className="fixed bottom-8 right-8 bg-slate-900/80 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-700 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-400 animate-pulse ring-1 ring-blue-500/20"><Cloud size={14}/> LIVE SYNC ACTIVE</div>}
     </div>
   );
 }
