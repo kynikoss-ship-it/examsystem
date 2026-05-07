@@ -94,9 +94,22 @@ export 기본 function App() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.globalConfig) setGlobalConfig(data.globalConfig);
-        if (data.gradeData) setGradeData(data.gradeData);
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
+        
+        // 안전 장치: 과거 데이터 구조가 로드되더라도 객체가 누락되지 않도록 기본값과 병합
+        if (data.gradeData) {
+          setGradeData(prev => {
+            const merged = { ...defaultGradeData };
+            Object.keys(data.gradeData).forEach(key => {
+              merged[key] = {
+                announcement: data.gradeData[key]?.announcement || '',
+                schedules: data.gradeData[key]?.schedules || defaultGradeData[key].schedules
+              };
+            });
+            return merged;
+          });
+        }
       } else {
         await setDoc(globalRef, { globalConfig, gradeData: defaultGradeData, globalAnnouncement: '', studentDirectory: {} }, { merge: true });
       }
@@ -119,7 +132,7 @@ export 기본 function App() {
     };
   }, [user, localConfig.grade, localConfig.class]);
 
-  // --- Derived Data ---
+  // --- Derived Data (안전한 접근 적용) ---
   const stats = useMemo(() => {
     const transfer = students.filter(s => s.isAbsent && s.absenceReason === '전출').length;
     const entrusted = students.filter(s => s.isAbsent && s.absenceReason === '위탁').length;
@@ -128,8 +141,11 @@ export 기본 function App() {
     return { total, present: total - absent, absent, transfer, entrusted };
   }, [students]);
 
-  const currentGradeSchedule = gradeData[localConfig.grade]?.schedules[globalConfig.day] || [];
-  const currentAnnouncement = gradeData[localConfig.grade]?.announcement || '';
+  // 방어 로직: 중첩 객체가 undefined일 경우를 대비해 안전하게 데이터 추출
+  const currentGradeData = gradeData[localConfig.grade] || {};
+  const currentSchedules = currentGradeData.schedules || {};
+  const currentGradeSchedule = currentSchedules[globalConfig.day] || [];
+  const currentAnnouncement = currentGradeData.announcement || '';
 
   // --- Write to Firestore Functions ---
   const updateGlobalDoc = async (updates) => {
@@ -224,6 +240,11 @@ export 기본 function App() {
     const day = globalConfig.day;
     setGradeData(prev => {
       const newData = { ...prev };
+      // 방어 로직: 객체가 비어있을 경우 생성
+      if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
+      if (!newData[grade].schedules) newData[grade].schedules = {};
+      if (!newData[grade].schedules[day]) newData[grade].schedules[day] = [];
+
       const updatedSchedule = newData[grade].schedules[day].map(s => s.id === id ? { ...s, [field]: value } : s);
       newData[grade].schedules[day] = updatedSchedule;
       return newData;
@@ -244,6 +265,7 @@ export 기본 function App() {
     if (targetGrades.length === 0) return;
     const newGradeData = { ...gradeData };
     targetGrades.forEach(grade => {
+      if (!newGradeData[grade]) newGradeData[grade] = { announcement: '', schedules: {} };
       newGradeData[grade].announcement = adminGradeAnnInput;
     });
     setGradeData(newGradeData);
@@ -414,7 +436,7 @@ export 기본 function App() {
          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex-1 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
-              <사용자 size={16} /> 결시자 명단
+              <Users size={16} /> 결시자 명단
             </h3>
             <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
               {localConfig.grade}학년 {localConfig.class}반
@@ -579,7 +601,7 @@ export 기본 function App() {
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2 flex-1 overflow-hidden">
                       <input 
-                        입력="checkbox" 
+                        type="checkbox" 
                         id={`absent-${student.id}`}
                         checked={student.isAbsent}
                         onChange={() => toggleAbsence(student.id)}
@@ -593,7 +615,7 @@ export 기본 function App() {
                         {/* 이름 수정 영역 */}
                         {editingStudentId === student.id ? (
                           <input
-                            입력="text"
+                            type="text"
                             value={student.name}
                             onChange={(e) => handleNameChange(student.id, e.target.value)}
                             onBlur={handleNameSave}
