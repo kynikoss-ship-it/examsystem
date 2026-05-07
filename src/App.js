@@ -39,6 +39,15 @@ const SUBJECT_CODE_MAP = {
   '영어': '22', '한문': '33',
 };
 
+// 날짜 포맷: ISO date 문자열(YYYY-MM-DD) → "MM/DD (요일)" 또는 fallback
+const DAYS_KR = ['일','월','화','수','목','금','토'];
+const formatDateBadge = (isoDate, dayNum) => {
+  if (!isoDate) return `${dayNum}일차`;
+  const d = new Date(isoDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return `${dayNum}일차`;
+  return `${d.getMonth() + 1}/${d.getDate()} (${DAYS_KR[d.getDay()]})`;
+};
+
 // 이미지 압축 (Firestore 1MB 제한 대응)
 const compressImage = (file, maxWidth = 1024, quality = 0.75) => {
   return new Promise((resolve, reject) => {
@@ -86,7 +95,7 @@ export default function App() {
   const [editingStudentId, setEditingStudentId] = useState(null);
 
   const [localConfig, setLocalConfig] = useState({ grade: '2', class: '5' });
-  const [globalConfig, setGlobalConfig] = useState({ day: '1', period: '1' });
+  const [globalConfig, setGlobalConfig] = useState({ day: '1', dates: { '1': '', '2': '', '3': '' } });
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
   const [studentDirectory, setStudentDirectory] = useState({});
   const [uploadStatus, setUploadStatus] = useState('');
@@ -121,7 +130,13 @@ export default function App() {
     const unsubGlobal = onSnapshot(globalRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.globalConfig) setGlobalConfig(data.globalConfig);
+        if (data.globalConfig) {
+          setGlobalConfig(prev => ({
+            ...prev,
+            ...data.globalConfig,
+            dates: { ...(prev.dates || {}), ...(data.globalConfig.dates || {}) },
+          }));
+        }
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
         if (data.gradeData) {
@@ -269,6 +284,33 @@ export default function App() {
     setAdminGlobalAnnInput('');
   };
 
+  const handleDeleteGlobalAnnouncement = async () => {
+    if (!window.confirm('전체 공통 공지를 삭제하시겠습니까?')) return;
+    await updateGlobalDoc({ globalAnnouncement: '' });
+  };
+
+  const handleDeleteGradeAnnouncement = async (grade) => {
+    if (!window.confirm(`${grade}학년 공지(텍스트·이미지)를 삭제하시겠습니까?`)) return;
+    try {
+      const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
+      if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
+      newData[grade].announcement = '';
+      await updateGlobalDoc({ gradeData: newData });
+      const imagesRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'announcement_images');
+      await setDoc(imagesRef, { [grade]: '' }, { merge: true });
+    } catch (err) {
+      console.error('공지 삭제 실패:', err);
+      alert(`삭제 실패: ${err.message || '알 수 없는 오류'}`);
+    }
+  };
+
+  const handleDateChange = (day, value) => {
+    const newDates = { ...(globalConfig.dates || {}), [day]: value };
+    const newConfig = { ...globalConfig, dates: newDates };
+    setGlobalConfig(newConfig);
+    updateGlobalDoc({ globalConfig: newConfig });
+  };
+
   const handleApplyGradeAnnouncement = async () => {
     try {
       // 1) 텍스트 공지는 gradeData 문서에 저장
@@ -355,13 +397,13 @@ export default function App() {
             <div className="col-span-4">시험 시간</div>
           </div>
           {currentGradeSchedule.map((item) => (
-            <div key={item.id} className={`grid grid-cols-12 items-center border-b border-slate-100 last:border-0 p-6 ${item.period.toString() === globalConfig.period ? 'bg-blue-50/50' : ''}`}>
-              <div className={`col-span-2 text-center text-3xl font-black ${item.period.toString() === globalConfig.period ? 'text-blue-600' : 'text-slate-300'}`}>{item.period}</div>
+            <div key={item.id} className="grid grid-cols-12 items-center border-b border-slate-100 last:border-0 p-6">
+              <div className="col-span-2 text-center text-3xl font-black text-slate-400">{item.period}</div>
               <div className="col-span-6 text-center">
                 <span className="text-3xl font-bold text-slate-800">{item.subject}</span>
                 <span className="text-slate-400 text-xl ml-2 font-medium">({item.code})</span>
               </div>
-              <div className={`col-span-4 text-center text-4xl font-black tracking-tighter ${item.period.toString() === globalConfig.period ? 'text-blue-700' : 'text-slate-600'}`}>{item.time}</div>
+              <div className="col-span-4 text-center text-4xl font-black tracking-tighter text-slate-700">{item.time}</div>
             </div>
           ))}
         </div>
@@ -450,8 +492,25 @@ export default function App() {
         <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-4">
           <h2 className="font-black text-xl tracking-tight">2. 시험 시간표 설정</h2>
           <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-black ring-1 ring-blue-100">
-            편집 중 · {localConfig.grade}학년 {globalConfig.day}일차
+            편집 중 · {localConfig.grade}학년 {formatDateBadge(globalConfig.dates?.[globalConfig.day], globalConfig.day)}
           </span>
+        </div>
+
+        <div className="bg-slate-50 rounded-2xl p-5 mb-5 border border-slate-200">
+          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">시험 일정</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {['1','2','3'].map(d => (
+              <div key={d} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                <span className="font-black text-slate-500 text-sm whitespace-nowrap">{d}일차</span>
+                <input
+                  type="date"
+                  value={globalConfig.dates?.[d] || ''}
+                  onChange={(e) => handleDateChange(d, e.target.value)}
+                  className="flex-1 bg-transparent text-slate-800 font-bold outline-none text-sm"
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="flex gap-3 mb-5 flex-wrap">
@@ -477,7 +536,7 @@ export default function App() {
                 }}
                 className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${globalConfig.day === d ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                {d}일차
+                {formatDateBadge(globalConfig.dates?.[d], d)}
               </button>
             ))}
           </div>
@@ -582,6 +641,62 @@ export default function App() {
       </section>
       <section className="flex flex-col gap-6 pb-12">
         <h2 className="font-black border-b border-slate-100 pb-4 text-xl tracking-tight">4. 실시간 전달사항 송출</h2>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">현재 게시 중인 공지</h3>
+          {(() => {
+            const hasGlobal = !!globalAnnouncement;
+            const activeGrades = ['1','2','3'].filter(g => (gradeData[g]?.announcement) || announcementImages[g]);
+            if (!hasGlobal && activeGrades.length === 0) {
+              return <p className="text-sm text-slate-400 text-center py-6">현재 게시된 공지가 없습니다.</p>;
+            }
+            return (
+              <div className="flex flex-col gap-2">
+                {hasGlobal && (
+                  <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-200">
+                    <span className="px-2 py-1 bg-red-500 text-white text-[10px] font-black rounded-full whitespace-nowrap mt-0.5">전체 공통</span>
+                    <p className="flex-1 text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep">{globalAnnouncement}</p>
+                    <button
+                      onClick={handleDeleteGlobalAnnouncement}
+                      className="text-red-500 hover:bg-red-100 p-1.5 rounded-md flex-shrink-0 transition-colors"
+                      title="공지 삭제"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+                {activeGrades.map(g => {
+                  const ann = gradeData[g]?.announcement;
+                  const img = announcementImages[g];
+                  return (
+                    <div key={g} className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                      <span className="px-2 py-1 bg-blue-500 text-white text-[10px] font-black rounded-full whitespace-nowrap mt-0.5">{g}학년</span>
+                      <div className="flex-1 flex items-start gap-3 min-w-0">
+                        {ann && <p className="flex-1 text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep min-w-0">{ann}</p>}
+                        {img && (
+                          <img
+                            src={img}
+                            alt=""
+                            onClick={() => setImageModalUrl(img)}
+                            className="w-16 h-16 object-cover rounded-md ring-1 ring-slate-200 cursor-zoom-in flex-shrink-0"
+                          />
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteGradeAnnouncement(g)}
+                        className="text-red-500 hover:bg-red-100 p-1.5 rounded-md flex-shrink-0 transition-colors"
+                        title="공지 삭제"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+
         <div className="grid grid-cols-2 gap-8">
           <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
             <h3 className="text-slate-800 font-black mb-4 text-sm uppercase">공통 공지사항</h3>
@@ -703,16 +818,13 @@ export default function App() {
             </div>
             <div className="w-px bg-slate-200 h-4"></div>
             <div className="flex items-center gap-3">
-              <span className="text-slate-400">일차</span>
-              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
-              </select>
-            </div>
-            <div className="w-px bg-slate-200 h-4"></div>
-            <div className="flex items-center gap-3">
-              <span className="text-slate-400">교시</span>
-              <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-600 border-b-2 border-blue-600 outline-none font-black cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
+              <span className="text-slate-400">날짜</span>
+              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-600 border-b-2 border-blue-600 outline-none font-black cursor-pointer">
+                {[1, 2, 3].map(n => (
+                  <option key={n} value={n}>
+                    {formatDateBadge(globalConfig.dates?.[n], n)}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
