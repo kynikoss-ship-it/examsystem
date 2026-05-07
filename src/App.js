@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -26,10 +26,41 @@ const appId = "school-exam-dashboard";
 // 컴포넌트 외부 상수 (렌더마다 재생성 방지)
 // ==========================================
 const DEFAULT_SCHEDULE_DAY = [
-  { id: 1, period: 1, subject: '국어', code: '01', time: '09:00 - 09:45' },
-  { id: 2, period: 2, subject: '과학', code: '04', time: '10:05 - 10:50' },
-  { id: 3, period: 3, subject: '역사', code: '07', time: '11:10 - 11:55' },
+  { id: 1, period: 1, subject: '국어', code: '02', time: '09:00 - 09:45' },
+  { id: 2, period: 2, subject: '과학', code: '05', time: '10:05 - 10:50' },
+  { id: 3, period: 3, subject: '역사', code: '04', time: '11:10 - 11:55' },
 ];
+
+// 과목명 → 과목코드 자동 매핑 테이블
+const SUBJECT_CODE_MAP = {
+  '도덕': '01', '국어': '02', '사회': '03', '역사': '04',
+  '과학': '05', '체육': '06', '음악': '07', '미술': '08',
+  '기술가정': '09', '정보': '10', '수학': '11',
+  '영어': '22', '한문': '33',
+};
+
+// 이미지 압축 (Firestore 1MB 제한 대응)
+const compressImage = (file, maxWidth = 1400, quality = 0.82) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 const makeDefaultGradeData = () => {
   const buildSchedules = () => ({
@@ -64,6 +95,9 @@ export default function App() {
   const [targetGrades, setTargetGrades] = useState(['1', '2', '3']);
   const [adminGlobalAnnInput, setAdminGlobalAnnInput] = useState('');
   const [adminGradeAnnInput, setAdminGradeAnnInput] = useState('');
+  const [adminGradeAnnImage, setAdminGradeAnnImage] = useState('');
+  const [imageUploadStatus, setImageUploadStatus] = useState('');
+  const [imageModalUrl, setImageModalUrl] = useState(null);
   const [students, setStudents] = useState([]);
 
   // 항상 최신 gradeData를 참조하기 위한 ref (race condition 방지)
@@ -179,9 +213,18 @@ export default function App() {
       const newData = JSON.parse(JSON.stringify(prev));
       if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
       if (!newData[grade].schedules[day]) newData[grade].schedules[day] = DEFAULT_SCHEDULE_DAY.map(s => ({ ...s }));
-      newData[grade].schedules[day] = newData[grade].schedules[day].map(s =>
-        s.id === id ? { ...s, [field]: value } : s
-      );
+      newData[grade].schedules[day] = newData[grade].schedules[day].map(s => {
+        if (s.id !== id) return s;
+        const updated = { ...s, [field]: value };
+        // 과목명 입력 시 매핑 테이블에 일치하면 코드 자동 채움
+        if (field === 'subject') {
+          const trimmed = value.trim();
+          if (SUBJECT_CODE_MAP[trimmed]) {
+            updated.code = SUBJECT_CODE_MAP[trimmed];
+          }
+        }
+        return updated;
+      });
       return newData;
     });
   };
@@ -199,9 +242,35 @@ export default function App() {
     targetGrades.forEach(g => {
       if (!newData[g]) newData[g] = { announcement: '', schedules: {} };
       newData[g].announcement = adminGradeAnnInput;
+      newData[g].announcementImage = adminGradeAnnImage || '';
     });
     await updateGlobalDoc({ gradeData: newData });
     setAdminGradeAnnInput('');
+    setAdminGradeAnnImage('');
+    setImageUploadStatus('');
+  };
+
+  const handleAnnouncementImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setImageUploadStatus('이미지 파일만 가능합니다.');
+      return;
+    }
+    try {
+      setImageUploadStatus('압축 중...');
+      const compressed = await compressImage(file);
+      const sizeKB = Math.round((compressed.length * 0.75) / 1024);
+      if (sizeKB > 800) {
+        setImageUploadStatus(`크기가 너무 큽니다 (${sizeKB}KB). 더 작은 이미지를 사용하세요.`);
+        return;
+      }
+      setAdminGradeAnnImage(compressed);
+      setImageUploadStatus(`첨부 완료 (${sizeKB}KB)`);
+    } catch (err) {
+      setImageUploadStatus('이미지 처리 실패');
+    }
+    e.target.value = ''; // 같은 파일 재선택 가능하도록 초기화
   };
 
   const toggleAbsence = async (id) => {
@@ -259,10 +328,20 @@ export default function App() {
                 <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{globalAnnouncement}</p>
               </div>
             )}
-            {currentAnnouncement && (
+            {(currentAnnouncement || currentGradeData.announcementImage) && (
               <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm">
                 <span className="text-blue-600 text-xs font-black mb-3 block tracking-widest uppercase">{localConfig.grade}학년 공지</span>
-                <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{currentAnnouncement}</p>
+                {currentAnnouncement && (
+                  <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap mb-4">{currentAnnouncement}</p>
+                )}
+                {currentGradeData.announcementImage && (
+                  <img
+                    src={currentGradeData.announcementImage}
+                    alt="공지 이미지"
+                    onClick={() => setImageModalUrl(currentGradeData.announcementImage)}
+                    className="max-h-96 rounded-xl cursor-zoom-in shadow-md hover:opacity-90 transition-opacity ring-1 ring-slate-200"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -354,6 +433,10 @@ export default function App() {
           <div className="col-span-2 text-center">종료 시간</div>
         </div>
 
+        <datalist id="subject-list">
+          {Object.keys(SUBJECT_CODE_MAP).map(name => <option key={name} value={name} />)}
+        </datalist>
+
         <div className="flex flex-col gap-2">
           {currentGradeSchedule.map(item => {
             const parts = (item.time || '').split(' - ');
@@ -366,6 +449,7 @@ export default function App() {
                 </div>
                 <input
                   type="text"
+                  list="subject-list"
                   value={item.subject}
                   onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)}
                   onBlur={saveSchedule}
@@ -398,6 +482,11 @@ export default function App() {
             );
           })}
         </div>
+
+        <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+          💡 과목명 입력 시 코드가 자동 매핑됩니다 ·{' '}
+          <span className="text-slate-500">도덕(01) · 국어(02) · 사회(03) · 역사(04) · 과학(05) · 체육(06) · 음악(07) · 미술(08) · 기술가정(09) · 정보(10) · 수학(11) · 영어(22) · 한문(33)</span>
+        </p>
       </section>
       <section>
         <div className="flex justify-between items-center mb-6">
@@ -451,6 +540,35 @@ export default function App() {
               ))}
             </div>
             <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full bg-white border border-slate-200 p-4 rounded-xl h-32 mb-4 text-slate-800 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm" placeholder="선택한 학년의 화면에만 표시됩니다." />
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+                  <ImageIcon size={14} /> 이미지 첨부 (선택)
+                </label>
+                {adminGradeAnnImage && (
+                  <button
+                    onClick={() => { setAdminGradeAnnImage(''); setImageUploadStatus(''); }}
+                    className="text-red-500 hover:text-red-700 text-xs font-black"
+                  >
+                    × 제거
+                  </button>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAnnouncementImageUpload}
+                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {imageUploadStatus && <p className="mt-3 text-blue-600 font-black text-xs">{imageUploadStatus}</p>}
+              {adminGradeAnnImage && (
+                <div className="mt-3">
+                  <img src={adminGradeAnnImage} alt="미리보기" className="max-h-40 rounded-lg shadow-sm ring-1 ring-slate-200" />
+                </div>
+              )}
+            </div>
+
             <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all">선택 학년 송출</button>
           </div>
         </div>
@@ -510,6 +628,19 @@ export default function App() {
               <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">돌아가기</button>
             </form>
           </div>
+        </div>
+      )}
+      {imageModalUrl && (
+        <div onClick={() => setImageModalUrl(null)} className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-50 p-8 cursor-zoom-out">
+          <img src={imageModalUrl} alt="공지 이미지 크게 보기" className="max-w-full max-h-full rounded-2xl shadow-2xl" />
+          <button
+            onClick={(e) => { e.stopPropagation(); setImageModalUrl(null); }}
+            className="absolute top-8 right-8 bg-white/10 hover:bg-white/20 text-white p-3 rounded-full transition-colors"
+            aria-label="닫기"
+          >
+            <X size={28} />
+          </button>
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/60 text-xs font-bold tracking-widest uppercase">화면 아무 곳이나 클릭하면 닫힙니다</div>
         </div>
       )}
       {isSyncing && <div className="fixed bottom-10 right-10 bg-white/90 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-200 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-600 animate-pulse ring-4 ring-blue-50"><Cloud size={14}/> 실시간 동기화 중</div>}
