@@ -310,16 +310,93 @@ export default function App() {
         </div>
       </section>
       <section>
-        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight flex items-center gap-2">2. 시간표 설정 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
-        <div className="flex flex-col gap-3">
-          {currentGradeSchedule.map(item => (
-            <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="w-16 font-black text-slate-400">{item.period}교시</span>
-              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg flex-1 text-slate-800 font-bold outline-none focus:ring-2 focus:ring-blue-500" />
-              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg w-24 text-slate-800 text-center font-bold outline-none focus:ring-2 focus:ring-blue-500" />
-              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg flex-1 text-slate-800 text-center font-bold outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-4">
+          <h2 className="font-black text-xl tracking-tight">2. 시험 시간표 설정</h2>
+          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-black ring-1 ring-blue-100">
+            편집 중 · {localConfig.grade}학년 {globalConfig.day}일차
+          </span>
+        </div>
+
+        <div className="flex gap-3 mb-5 flex-wrap">
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['1','2','3'].map(g => (
+              <button
+                key={g}
+                onClick={() => setLocalConfig({ ...localConfig, grade: g })}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${localConfig.grade === g ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {g}학년
+              </button>
+            ))}
+          </div>
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['1','2','3'].map(d => (
+              <button
+                key={d}
+                onClick={() => {
+                  const newConfig = { ...globalConfig, day: d };
+                  setGlobalConfig(newConfig);
+                  updateGlobalDoc({ globalConfig: newConfig });
+                }}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${globalConfig.day === d ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {d}일차
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-3 px-4 mb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="col-span-1 text-center">교시</div>
+          <div className="col-span-5">과목명</div>
+          <div className="col-span-2 text-center">코드</div>
+          <div className="col-span-2 text-center">시작 시간</div>
+          <div className="col-span-2 text-center">종료 시간</div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {currentGradeSchedule.map(item => {
+            const parts = (item.time || '').split(' - ');
+            const startTime = (parts[0] || '').trim();
+            const endTime = (parts[1] || '').trim();
+            return (
+              <div key={item.id} className="grid grid-cols-12 gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors shadow-sm">
+                <div className="col-span-1 flex justify-center">
+                  <span className="w-10 h-10 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg font-black text-lg">{item.period}</span>
+                </div>
+                <input
+                  type="text"
+                  value={item.subject}
+                  onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)}
+                  onBlur={saveSchedule}
+                  placeholder="과목명"
+                  className="col-span-5 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={item.code}
+                  onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)}
+                  onBlur={saveSchedule}
+                  placeholder="00"
+                  className="col-span-2 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-center text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                />
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => handleScheduleChange(item.id, 'time', `${e.target.value} - ${endTime}`)}
+                  onBlur={saveSchedule}
+                  className="col-span-2 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-center text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                />
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => handleScheduleChange(item.id, 'time', `${startTime} - ${e.target.value}`)}
+                  onBlur={saveSchedule}
+                  className="col-span-2 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-center text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                />
+              </div>
+            );
+          })}
         </div>
       </section>
       <section>
