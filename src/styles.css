@@ -1,11 +1,6 @@
-③ src/styles.css
-
-기본 여백 초기화만 남깁니다.
-
 body {
   margin: 0;
   font-family: sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
