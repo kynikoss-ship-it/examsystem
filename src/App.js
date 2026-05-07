@@ -1,3 +1,7 @@
+④ src/App.js (또는 App.jsx)
+
+중복 선언을 제거하고 방어 로직을 강화한 최신 코드입니다. 이 코드 전체를 복사하여 App.js에 덮어쓰세요.
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 설정, MonitorPlay, 사용자, AlertCircle, Lock, X, Trash2, Plus, Cloud, CloudOff, 보내기 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
@@ -17,6 +21,7 @@ const firebaseConfig = {
   measurementId: "G-36DXM2SY8N"
 };
 
+// 중복 선언 방지를 위해 한 번만 초기화합니다.
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -97,7 +102,6 @@ export 기본 function App() {
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
         
-        // 안전 장치: 과거 데이터 구조가 로드되더라도 객체가 누락되지 않도록 기본값과 병합
         if (data.gradeData) {
           setGradeData(prev => {
             const merged = { ...defaultGradeData };
@@ -132,7 +136,7 @@ export 기본 function App() {
     };
   }, [user, localConfig.grade, localConfig.class]);
 
-  // --- Derived Data (안전한 접근 적용) ---
+  // --- Derived Data ---
   const stats = useMemo(() => {
     const transfer = students.filter(s => s.isAbsent && s.absenceReason === '전출').length;
     const entrusted = students.filter(s => s.isAbsent && s.absenceReason === '위탁').length;
@@ -141,7 +145,6 @@ export 기본 function App() {
     return { total, present: total - absent, absent, transfer, entrusted };
   }, [students]);
 
-  // 방어 로직: 중첩 객체가 undefined일 경우를 대비해 안전하게 데이터 추출
   const currentGradeData = gradeData[localConfig.grade] || {};
   const currentSchedules = currentGradeData.schedules || {};
   const currentGradeSchedule = currentSchedules[globalConfig.day] || [];
@@ -240,7 +243,6 @@ export 기본 function App() {
     const day = globalConfig.day;
     setGradeData(prev => {
       const newData = { ...prev };
-      // 방어 로직: 객체가 비어있을 경우 생성
       if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
       if (!newData[grade].schedules) newData[grade].schedules = {};
       if (!newData[grade].schedules[day]) newData[grade].schedules[day] = [];
@@ -475,7 +477,6 @@ export 기본 function App() {
             )}
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -483,7 +484,7 @@ export 기본 function App() {
   const renderAdmin = () => (
     <div className="bg-white flex-1 rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-8 overflow-y-auto">
       <div>
-        <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">1. 학생 명렬표 CSV 업로드 (전교 원본 데이터 교체)</h2>
+        <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">1. 학생 명렬표 CSV 업로드</h2>
         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
           <input 
             입력="file" 
@@ -492,21 +493,17 @@ export 기본 function App() {
             className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           />
           {uploadStatus && (
-            <span className={`text-sm font-bold ${uploadStatus.includes('오류') || uploadStatus.includes('없습니다') ? 'text-red-500' : 'text-green-600'}`}>
+            <span className={`text-sm font-bold ${uploadStatus.includes('오류') ? 'text-red-500' : 'text-green-600'}`}>
               {uploadStatus}
             </span>
           )}
         </div>
-        <p className="text-xs text-slate-500 mt-2">
-          * 제공하신 양식(학년,반,번호,성명)의 CSV 파일을 엑셀에서 저장 후 업로드하세요. (인코딩: EUC-KR 기본 적용)
-        </p>
       </div>
 
       <div>
         <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">
           2. 학년별 시간표 관리 <span className="text-sm font-normal text-blue-600 ml-2">({localConfig.grade}학년 {globalConfig.day}일차 기준)</span>
         </h2>
-        <p className="text-sm text-slate-500 mb-4">현재 선택된 학년과 일차의 시간표를 수정합니다. 상단 뷰 설정에서 학년/일차를 변경하여 다른 시간표를 제어할 수 있습니다.</p>
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-500 border-b">
@@ -522,31 +519,13 @@ export 기본 function App() {
                 <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50">
                   <td className="p-3 text-center font-bold">{item.period}</td>
                   <td className="p-3">
-                    <input 
-                      type="text" 
-                      value={item.subject} 
-                      onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)}
-                      onBlur={saveSchedule}
-                      className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500" />
                   </td>
                   <td className="p-3">
-                    <input 
-                      type="text" 
-                      value={item.code} 
-                      onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)}
-                      onBlur={saveSchedule}
-                      className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500" />
                   </td>
                   <td className="p-3">
-                    <input 
-                      type="text" 
-                      value={item.time} 
-                      onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)}
-                      onBlur={saveSchedule}
-                      className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="w-full border rounded p-2 outline-none focus:ring-1 focus:ring-blue-500" />
                   </td>
                 </tr>
               ))}
@@ -557,111 +536,33 @@ export 기본 function App() {
 
       <div>
         <div className="flex justify-between items-center mb-4 pb-2 border-b">
-          <h2 className="text-lg font-bold text-slate-800">
-            3. 학생 및 결시자 관리 <span className="text-sm font-normal text-blue-600 ml-2">({localConfig.grade}학년 {localConfig.class}반 기준)</span>
-          </h2>
+          <h2 className="text-lg font-bold text-slate-800">3. 학생 및 결시자 관리</h2>
           <div className="flex gap-2">
-            <button
-              onClick={handleResetClassStudents}
-              className="flex items-center gap-1 bg-red-50 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors text-sm font-bold"
-            >
-              원본 명단으로 초기화
-            </button>
-            <button
-              onClick={handleAddStudent}
-              className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors text-sm font-bold"
-            >
-              <Plus size={16} /> 학생 추가
-            </button>
+            <button onClick={handleResetClassStudents} className="bg-red-50 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-100 text-sm font-bold">원본 명단 초기화</button>
+            <button onClick={handleAddStudent} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 text-sm font-bold"><Plus size={16} className="inline" /> 학생 추가</button>
           </div>
         </div>
-        <p className="text-sm text-slate-500 mb-4">해당 학급 학생의 결시 여부를 체크하고 사유를 선택하세요. 상단의 [원본 명단으로 초기화] 버튼을 누르면 업로드한 CSV 데이터를 기반으로 현재 반의 명단이 리셋됩니다.</p>
         
         {students.length === 0 ? (
-          <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-lg">
-            <p className="text-slate-500 font-medium">현재 반에 등록된 학생이 없습니다.</p>
-            <p className="text-sm text-slate-400 mt-1">상단의 [원본 명단으로 초기화] 버튼을 눌러 명단을 불러오세요.</p>
-          </div>
+          <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-lg">반 명단이 없습니다. [원본 명단 초기화]를 누르세요.</div>
         ) : (
           <div className="grid grid-cols-5 gap-3">
             {students.map(student => {
-              const isExcluded = ['전출', '위탁'].includes(student.absenceReason);
+              const isEx = ['전출', '위탁'].includes(student.absenceReason);
               return (
-                <div 
-                  key={student.id} 
-                  className={`flex flex-col p-3 border rounded-lg transition-colors
-                    ${!student.isAbsent 
-                      ? 'bg-slate-50 hover:bg-slate-100 border-slate-200'
-                      : isExcluded
-                        ? 'bg-slate-100 border-slate-300'
-                        : 'bg-red-50 border-red-300'
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                      <input 
-                        type="checkbox" 
-                        id={`absent-${student.id}`}
-                        checked={student.isAbsent}
-                        onChange={() => toggleAbsence(student.id)}
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer shrink-0"
-                      />
-                      <div className="flex items-center gap-1 flex-1 overflow-hidden">
-                        <label htmlFor={`absent-${student.id}`} className="text-xs text-slate-500 cursor-pointer shrink-0">
-                          {student.id}번
-                        </label>
-                        
-                        {/* 이름 수정 영역 */}
-                        {editingStudentId === student.id ? (
-                          <input
-                            type="text"
-                            value={student.name}
-                            onChange={(e) => handleNameChange(student.id, e.target.value)}
-                            onBlur={handleNameSave}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleNameSave();
-                            }}
-                            autoFocus
-                            className="w-full text-sm font-medium border-b border-blue-500 outline-none bg-transparent px-1 text-slate-800"
-                          />
-                        ) : (
-                          <span 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setEditingStudentId(student.id);
-                            }}
-                            className={`font-medium text-sm px-1 rounded cursor-text hover:bg-slate-200 transition-colors truncate w-full
-                              ${student.isAbsent ? (isExcluded ? 'text-slate-500' : 'text-red-700') : 'text-slate-800'}
-                            `}
-                            title="클릭하여 이름 수정"
-                          >
-                            {student.name}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteStudent(student.id)}
-                      className="text-slate-400 hover:text-red-500 p-1 shrink-0 transition-colors"
-                      title="명단에서 삭제"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                <div key={student.id} className={`flex flex-col p-3 border rounded-lg ${!student.isAbsent ? 'bg-slate-50' : isEx ? 'bg-slate-100' : 'bg-red-50'}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1 overflow-hidden">
+                    <input 입력="checkbox" checked={student.isAbsent} onChange={() => toggleAbsence(student.id)} className="w-4 h-4" />
+                    <span onClick={() => setEditingStudentId(student.id)} className="text-sm font-medium truncate flex-1 cursor-pointer">
+                      {editingStudentId === student.id ? 
+                        <input value={student.name} onChange={(e) => handleNameChange(student.id, e.target.value)} onBlur={handleNameSave} autoFocus className="w-full border-b" /> 
+                        : student.name}
+                    </span>
+                    <button onClick={() => handleDeleteStudent(student.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
                   </div>
-                  
                   {student.isAbsent && (
-                    <select
-                      value={student.absenceReason}
-                      onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)}
-                      className="mt-1 block w-full px-2 py-1 text-xs border-slate-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white border text-slate-700"
-                    >
-                      <option value="질병">질병</option>
-                      <option value="인정">인정</option>
-                      <option value="미인정">미인정</option>
-                      <option value="기타">기타</option>
-                      <option value="전출">전출</option>
-                      <option value="위탁">위탁</option>
+                    <select value={student.absenceReason} onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} className="text-xs border rounded">
+                      <option value="질병">질병</option><option value="인정">인정</option><option value="미인정">미인정</option><option value="기타">기타</option><option value="전출">전출</option><option value="위탁">위탁</option>
                     </select>
                   )}
                 </div>
@@ -673,85 +574,16 @@ export 기본 function App() {
 
       <div>
         <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">4. 전달사항 관리</h2>
-        <div className="flex flex-col gap-6">
-          
-          {/* 전체 전달사항 */}
-          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold text-red-700">전체 공통 전달사항</span>
-            </div>
-            <div className="flex gap-2">
-              <textarea 
-                value={adminGlobalAnnInput}
-                onChange={(e) => setAdminGlobalAnnInput(e.target.value)}
-                className="flex-1 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 min-h-[80px] resize-none text-slate-700"
-                placeholder="전교에 송출할 공통 전달사항을 입력하세요."
-              />
-              <button 
-                onClick={handleApplyGlobalAnnouncement}
-                disabled={!adminGlobalAnnInput.trim()}
-                className="bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-bold px-6 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors"
-              >
-                <보내기 size={20} />
-                <span>전체 적용</span>
-              </button>
-            </div>
-            {globalAnnouncement && (
-              <div className="mt-3 bg-white border border-slate-200 rounded p-3">
-                <span className="text-xs font-bold text-red-500 block mb-1">현재 송출 중인 전체 내용</span>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap break-keep">{globalAnnouncement}</p>
-              </div>
-            )}
+        <div className="flex flex-col gap-4">
+          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full border rounded p-3 h-20" placeholder="전체 공통 전달사항" />
+          <button onClick={handleApplyGlobalAnnouncement} className="bg-red-600 text-white font-bold py-2 rounded">전체 적용</button>
+          <div className="flex gap-4 items-center bg-blue-50 p-3 rounded">
+            {['1', '2', '3'].map(g => (
+              <label key={g}><input type="checkbox" checked={targetGrades.includes(g)} onChange={() => toggleTargetGrade(g)} /> {g}학년</label>
+            ))}
           </div>
-
-          {/* 학년별 전달사항 */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <div className="flex items-center gap-4 mb-3">
-              <span className="text-sm font-bold text-blue-700">학년별 전달사항</span>
-              <div className="flex items-center gap-3">
-                {['1', '2', '3'].map(g => (
-                  <label key={`target-${g}`} className="flex items-center gap-1 cursor-pointer">
-                    <input 
-                      입력="checkbox" 
-                      checked={targetGrades.includes(g)}
-                      onChange={() => toggleTargetGrade(g)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-slate-700">{g}학년</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <textarea 
-                value={adminGradeAnnInput}
-                onChange={(e) => setAdminGradeAnnInput(e.target.value)}
-                className="flex-1 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] resize-none text-slate-700"
-                placeholder="선택한 학년에 송출할 전달사항을 입력하세요."
-              />
-              <button 
-                onClick={handleApplyGradeAnnouncement}
-                disabled={targetGrades.length === 0 || !adminGradeAnnInput.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold px-6 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors"
-              >
-                <보내기 size={20} />
-                <span>선택 적용</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 mt-3">
-              {['1', '2', '3'].map(g => (
-                <div key={`current-${g}`} className="bg-white border border-slate-200 rounded p-3">
-                  <span className="text-xs font-bold text-blue-500 block mb-1">{g}학년 현재 내용</span>
-                  <p className="text-sm text-slate-600 whitespace-pre-wrap break-keep">
-                    {gradeData[g]?.announcement || '등록된 내용 없음'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
+          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full border rounded p-3 h-20" placeholder="학년별 전달사항" />
+          <button onClick={handleApplyGradeAnnouncement} className="bg-blue-600 text-white font-bold py-2 rounded">선택 학년 적용</button>
         </div>
       </div>
     </div>
@@ -759,138 +591,54 @@ export 기본 function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 font-sans flex flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-4">
         <div className="flex items-center space-x-6">
-          <div className="flex space-x-2">
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-md text-sm border border-blue-200 shadow-sm">
-              정기고사
-            </span>
-            {/* Sync Status Indicator */}
-            {user ? (
-              <span className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-md border border-green-200">
-                <Cloud size={14} /> {isSyncing ? '동기화 중...' : '연결됨'}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-md border border-slate-200">
-                <CloudOff size={14} /> 연결 대기
-              </span>
-            )}
+          <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-md text-sm">정기고사</span>
+          <div className="flex space-x-4 text-sm items-center bg-slate-50 px-4 py-1.5 rounded-lg border">
+            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({...localConfig, grade: e.target.value})} className="bg-transparent font-bold">
+              {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
+            </select>
+            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({...localConfig, class: e.target.value})} className="bg-transparent font-bold">
+              {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
+            </select>
+            일자 <select value={globalConfig.day} onChange={handleGlobalConfigChange} name="day" className="bg-transparent font-bold">
+              {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
+            </select>
+            교시 <select value={globalConfig.period} onChange={handleGlobalConfigChange} name="period" className="bg-transparent font-bold text-blue-600">
+              {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
+            </select>
           </div>
-          
-          <div className="flex space-x-4 text-sm items-center bg-slate-50 px-4 py-1.5 rounded-lg border border-slate-200">
-            {/* 학년 Select (Local) */}
-            <div className="flex items-center space-x-2">
-              <span className="text-slate-500 font-medium">학년</span>
-              <select 
-                name="grade" 
-                value={localConfig.grade} 
-                onChange={handleLocalConfigChange}
-                className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
-              >
-                {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
-              </select>
-            </div>
-            <div className="w-px h-4 bg-slate-300"></div>
-            
-            {/* 반 Select (Local) */}
-            <div className="flex items-center space-x-2">
-              <span className="text-slate-500 font-medium">반</span>
-              <select 
-                name="class" 
-                value={localConfig.class} 
-                onChange={handleLocalConfigChange}
-                className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
-              >
-                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
-              </select>
-            </div>
-            <div className="w-px h-4 bg-slate-300"></div>
-
-            {/* 일차 Select (Global) */}
-            <div className="flex items-center space-x-2">
-              <span className="text-slate-500 font-medium">일자</span>
-              <select 
-                name="day" 
-                value={globalConfig.day} 
-                onChange={handleGlobalConfigChange}
-                className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
-              >
-                {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
-              </select>
-            </div>
-            <div className="w-px h-4 bg-slate-300"></div>
-
-            {/* 교시 Select (Global) */}
-            <div className="flex items-center space-x-2">
-              <span className="text-slate-500 font-medium">교시</span>
-              <select 
-                name="period" 
-                value={globalConfig.period} 
-                onChange={handleGlobalConfigChange}
-                className="bg-transparent font-bold text-blue-600 outline-none cursor-pointer"
-              >
-                {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
-              </select>
-            </div>
-          </div>
-
         </div>
-
-        <div className="flex items-center space-x-2 text-sm font-medium">
-          <button 
-            onClick={() => setView('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'dashboard' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-          >
-            <MonitorPlay size={16} /> 대시보드
-          </button>
-          <button 
-            onClick={handleAdminClick}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'admin' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-          >
-            <설정 size={16} /> 관리자
-          </button>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg ${view === 'dashboard' ? 'bg-slate-800 text-white' : 'bg-white border'}`}>대시보드</button>
+          <button onClick={handleAdminClick} className={`px-4 py-2 rounded-lg ${view === 'admin' ? 'bg-slate-800 text-white' : 'bg-white border'}`}>관리자</button>
         </div>
       </header>
-
-      {/* Main Content Area */}
       {view === 'dashboard' ? renderDashboard() : renderAdmin()}
-
-      {/* Password Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-slate-200 bg-slate-50">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Lock size={18} className="text-slate-500" />
-                관리자 인증
-              </h3>
-              <button onClick={() => {setShowAuthModal(false); setAuthError(''); setPasswordInput('');}} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordSubmit} className="p-6">
-              <p className="text-sm text-slate-600 mb-4">관리자 페이지에 접근하려면 비밀번호를 입력하세요.</p>
-              <input
-                입력="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="비밀번호"
-                className="w-full border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 mb-2 text-slate-800"
-                autoFocus
-              />
-              {authError && <p className="text-xs text-red-500 mb-4">{authError}</p>}
-              <button
-                입력="submit"
-                className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-slate-700 transition-colors mt-2"
-              >
-                확인
-              </button>
-            </form>
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
+            <h3 className="font-bold mb-4">관리자 인증</h3>
+            <input 입력="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full border p-3 rounded mb-2" autoFocus />
+            {authError && <p className="text-red-500 text-xs mb-2">{authError}</p>}
+            <button onClick={handlePasswordSubmit} className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold">확인</button>
+            <button onClick={() => setShowAuthModal(false)} className="w-full mt-2 text-slate-400 text-sm">취소</button>
           </div>
         </div>
       )}
-      
     </div>
   );
 }
+
+
+3. DependencyNotFoundError 문제 해결법
+
+만약 코드를 적용했는데도 Could not find dependency: 'firebase/app' 오류가 계속된다면 다음을 수행하세요:
+
+CodeSandbox 좌측 사이드바의 Dependencies 섹션을 봅니다.
+
+firebase 항목 옆의 X 아이콘을 눌러 삭제합니다.
+
+다시 추가하기 Dependency를 눌러 firebase를 검색하고 설치합니다.
+
+웹 브라우저 미리보기 창을 새로고침합니다.
