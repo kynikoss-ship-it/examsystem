@@ -232,7 +232,7 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="grid grid-cols-12 gap-6 flex-1">
-      <div className="col-span-9 flex flex-col gap-6">
+      <div className="col-span-10 flex flex-col gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="grid grid-cols-12 bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center">
             <div className="col-span-2">교시</div>
@@ -268,8 +268,8 @@ export default function App() {
           </div>
         </div>
       </div>
-      <div className="col-span-3 flex flex-col gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex gap-4 text-center shadow-sm">
+      <div className="col-span-2 flex flex-col gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 flex gap-2 text-center shadow-sm">
           <div className="flex-1">
             <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">재적</span>
             <div className="text-3xl font-black text-slate-800">{stats.total}</div>
@@ -283,15 +283,15 @@ export default function App() {
             <div className="text-3xl font-black text-red-600">{stats.absent}</div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 flex-1 overflow-y-auto shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 flex-1 overflow-y-auto shadow-sm">
           <h3 className="font-bold text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase text-xs"><Users size={18}/> 결시자 명단</h3>
           <div className="flex flex-col gap-3">
             {students.filter(s => s.isAbsent).map(s => (
-              <div key={s.id} className="p-4 border border-slate-100 rounded-xl flex justify-between items-center bg-slate-50/50 shadow-sm">
-                <span className="text-lg font-bold text-slate-700">
-                  <span className="text-slate-400 mr-2 font-medium">{s.id}</span> {s.name}
+              <div key={s.id} className="p-3 border border-slate-100 rounded-xl flex flex-col gap-2 bg-slate-50/50 shadow-sm">
+                <span className="text-base font-bold text-slate-700">
+                  <span className="text-slate-400 mr-2 font-medium">{s.id}</span>{s.name}
                 </span>
-                <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-black ring-1 ring-red-200">{s.absenceReason}</span>
+                <span className="self-start px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-black ring-1 ring-red-200">{s.absenceReason}</span>
               </div>
             ))}
           </div>
