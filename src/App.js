@@ -4,7 +4,9 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
-// Firebase 설정
+// ==========================================
+// Firebase 설정 (질문자님 프로젝트 정보)
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
   authDomain: "exam-system-9bcd7.firebaseapp.com",
@@ -55,7 +57,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error("인증 실패:", err));
+    signInAnonymously(auth).catch(err => console.error("인증 에러:", err));
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
@@ -71,7 +73,9 @@ export default function App() {
         if (data.globalConfig) setGlobalConfig(data.globalConfig);
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
-        if (data.gradeData) setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
+        if (data.gradeData) {
+          setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
+        }
       }
       setIsSyncing(false);
     });
@@ -125,28 +129,15 @@ export default function App() {
         const rows = text.split(/\r?\n/);
         const directory = {};
         for (let i = 1; i < rows.length; i++) {
-          const row = rows[i].trim();
-          if (!row) continue;
-          const cols = row.split(',');
+          const cols = rows[i].split(',');
           if (cols.length < 4) continue;
-          
-          const grade = cols[0].trim();
-          const cls = cols[1].trim();
-          const num = parseInt(cols[2].trim());
-          const name = cols[3].trim();
-
-          if (isNaN(num)) continue;
-
-          const key = `${grade}-${cls}`;
+          const key = `${cols[0].trim()}-${cols[1].trim()}`;
           if (!directory[key]) directory[key] = [];
-          directory[key].push({ id: num, name: name, isAbsent: false, absenceReason: '질병' });
+          directory[key].push({ id: parseInt(cols[2]), name: cols[3].trim(), isAbsent: false, absenceReason: '질병' });
         }
         await updateGlobalDoc({ studentDirectory: directory });
         setUploadStatus('저장 완료');
-      } catch (err) { 
-        console.error(err);
-        setUploadStatus('오류 발생 (브라우저 콘솔 확인)'); 
-      }
+      } catch (err) { setUploadStatus('오류 발생'); }
     };
     reader.readAsText(file, 'euc-kr');
   };
@@ -216,71 +207,79 @@ export default function App() {
   };
 
   const renderDashboard = () => (
-    <div className="grid grid-cols-12 gap-4 flex-1">
-      <div className="col-span-9 flex flex-col gap-4">
-        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden">
-          <div className="grid grid-cols-12 bg-slate-800 text-slate-400 font-bold text-sm border-b border-slate-700 p-2">
+    <div className="grid grid-cols-12 gap-6 flex-1">
+      <div className="col-span-9 flex flex-col gap-6">
+        {/* 시간표 섹션 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-12 bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3">
             <div className="col-span-2 text-center">교시</div>
             <div className="col-span-6 text-center">과목 (코드)</div>
-            <div className="col-span-4 text-center">시간</div>
+            <div className="col-span-4 text-center">시험 시간</div>
           </div>
           {currentGradeSchedule.map((item) => (
-            <div key={item.id} className={`grid grid-cols-12 items-center border-b border-slate-800/50 p-5 ${item.period.toString() === globalConfig.period ? 'bg-blue-900/30' : ''}`}>
-              <div className="col-span-2 text-center text-2xl font-black text-slate-500">{item.period}</div>
-              <div className="col-span-6 text-center text-3xl font-bold text-slate-100">{item.subject} <span className="text-slate-500 text-xl font-medium">({item.code})</span></div>
-              <div className="col-span-4 text-center text-4xl font-black text-blue-400 tracking-tighter">{item.time}</div>
+            <div key={item.id} className={`grid grid-cols-12 items-center border-b border-slate-100 last:border-0 p-6 ${item.period.toString() === globalConfig.period ? 'bg-blue-50/50' : ''}`}>
+              <div className={`col-span-2 text-center text-3xl font-black ${item.period.toString() === globalConfig.period ? 'text-blue-600' : 'text-slate-300'}`}>{item.period}</div>
+              <div className="col-span-6 text-center">
+                <span className="text-3xl font-bold text-slate-800">{item.subject}</span>
+                <span className="text-slate-400 text-xl ml-2 font-medium">({item.code})</span>
+              </div>
+              <div className={`col-span-4 text-center text-4xl font-black tracking-tighter ${item.period.toString() === globalConfig.period ? 'text-blue-700' : 'text-slate-600'}`}>{item.time}</div>
             </div>
           ))}
         </div>
-        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-8 flex-1 flex flex-col gap-6">
-          <h3 className="font-black text-slate-500 text-lg flex items-center gap-2 uppercase tracking-widest"><AlertCircle size={24}/> 본부 전달사항</h3>
-          <div className="flex flex-col gap-4 flex-1 justify-center">
+        {/* 전달사항 섹션 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 flex-1 flex flex-col gap-8">
+          <h3 className="font-bold text-slate-400 text-sm flex items-center gap-2 uppercase tracking-widest"><AlertCircle size={20}/> 본부 공지사항</h3>
+          <div className="flex flex-col gap-6 flex-1 justify-center">
             {globalAnnouncement && (
-              <div className="p-8 bg-red-950/40 border-l-8 border-red-600 rounded-r-2xl shadow-inner">
-                <span className="text-red-500 text-sm font-black mb-2 block tracking-widest uppercase">전체 공통</span>
-                <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{globalAnnouncement}</p>
+              <div className="p-8 bg-red-50 border-l-8 border-red-500 rounded-r-2xl shadow-sm">
+                <span className="text-red-600 text-xs font-black mb-3 block tracking-widest uppercase">전체 공통 공지</span>
+                <p className="text-4xl font-black text-slate-800 leading-tight break-keep">{globalAnnouncement}</p>
               </div>
             )}
             {currentAnnouncement && (
-              <div className="p-8 bg-blue-950/40 border-l-8 border-blue-600 rounded-r-2xl shadow-inner">
-                <span className="text-blue-500 text-sm font-black mb-2 block tracking-widest uppercase">{localConfig.grade}학년 공지</span>
-                <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{currentAnnouncement}</p>
+              <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm">
+                <span className="text-blue-600 text-xs font-black mb-3 block tracking-widest uppercase">{localConfig.grade}학년 개별 공지</span>
+                <p className="text-4xl font-black text-slate-800 leading-tight break-keep">{currentAnnouncement}</p>
               </div>
             )}
             {!globalAnnouncement && !currentAnnouncement && (
-              <div className="text-center text-slate-700 text-2xl font-bold italic">현재 전달사항이 없습니다.</div>
+              <div className="text-center text-slate-300 text-2xl font-bold italic">현재 등록된 전달사항이 없습니다.</div>
             )}
           </div>
         </div>
       </div>
-      <div className="col-span-3 flex flex-col gap-4">
-        <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 flex gap-3 text-center">
-          <div className="flex-1 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-            <span className="text-[10px] text-slate-500 font-bold uppercase">재적</span>
-            <div className="text-3xl font-black text-slate-200">{stats.total}</div>
+      {/* 우측 사이드바 */}
+      <div className="col-span-3 flex flex-col gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex gap-4 text-center shadow-sm">
+          <div className="flex-1">
+            <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">재적</span>
+            <div className="text-3xl font-black text-slate-800">{stats.total}</div>
           </div>
-          <div className="flex-1 bg-blue-900/20 p-3 rounded-lg border border-blue-900/50">
-            <span className="text-[10px] text-blue-500 font-bold uppercase">응시</span>
-            <div className="text-3xl font-black text-blue-400">{stats.present}</div>
+          <div className="w-px bg-slate-100 h-10 self-center"></div>
+          <div className="flex-1">
+            <span className="text-[10px] text-blue-400 font-bold uppercase block mb-1">응시</span>
+            <div className="text-3xl font-black text-blue-600">{stats.present}</div>
           </div>
-          <div className="flex-1 bg-red-900/20 p-3 rounded-lg border border-red-900/50">
-            <span className="text-[10px] text-red-500 font-bold uppercase">결시</span>
-            <div className="text-3xl font-black text-red-400">{stats.absent}</div>
+          <div className="w-px bg-slate-100 h-10 self-center"></div>
+          <div className="flex-1">
+            <span className="text-[10px] text-red-400 font-bold uppercase block mb-1">결시</span>
+            <div className="text-3xl font-black text-red-600">{stats.absent}</div>
           </div>
         </div>
-        <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 flex-1 overflow-y-auto">
-          <h3 className="font-black text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase"><Users size={20}/> 결시자 명단</h3>
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 flex-1 overflow-y-auto shadow-sm">
+          <h3 className="font-bold text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase text-xs"><Users size={18}/> 결시자 명단</h3>
           <div className="flex flex-col gap-3">
             {students.filter(s => s.isAbsent).map(s => (
-              <div key={s.id} className="p-4 border border-slate-800 rounded-xl flex justify-between items-center bg-slate-800/30">
-                <span className="text-lg font-bold text-slate-300">
-                  <span className="text-slate-600 mr-2">{s.id}</span> {s.name}
+              <div key={s.id} className="p-4 border border-slate-100 rounded-xl flex justify-between items-center bg-slate-50/50 shadow-sm">
+                <span className="text-lg font-bold text-slate-700">
+                  <span className="text-slate-400 mr-2 font-medium">{s.id}</span> {s.name}
                 </span>
-                <span className="px-3 py-1 bg-red-900/40 text-red-400 rounded-full text-xs font-black ring-1 ring-red-500/30">{s.absenceReason}</span>
+                <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-black ring-1 ring-red-200">{s.absenceReason}</span>
               </div>
             ))}
             {students.filter(s => s.isAbsent).length === 0 && (
-              <div className="text-center py-10 text-slate-700 font-bold">결시자 없음</div>
+              <div className="text-center py-10 text-slate-300 font-bold">결시자 없음</div>
             )}
           </div>
         </div>
@@ -289,45 +288,53 @@ export default function App() {
   );
 
   const renderAdmin = () => (
-    <div className="bg-slate-900 flex-1 rounded-xl border border-slate-800 p-8 overflow-y-auto flex flex-col gap-10 text-slate-200">
+    <div className="bg-white flex-1 rounded-2xl border border-slate-200 p-8 overflow-y-auto flex flex-col gap-10 text-slate-800 shadow-sm">
       <section>
-        <h2 className="font-black border-b border-slate-800 pb-3 mb-6 text-xl text-blue-500 tracking-wider">1. 학생 명렬표 CSV 업로드</h2>
-        <input type="file" accept=".csv" onChange={handleFileUpload} className="p-4 border border-slate-800 rounded-xl w-full bg-slate-800/50 text-slate-400" />
-        {uploadStatus && <p className="mt-3 text-green-500 font-black flex items-center gap-2"><Cloud size={16}/> {uploadStatus}</p>}
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl text-slate-800 tracking-tight flex items-center gap-2">
+          <Plus size={20} className="text-blue-600"/> 1. 학생 명단 데이터 업로드 (CSV)
+        </h2>
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 border-dashed">
+          <input type="file" accept=".csv" onChange={handleFileUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+          {uploadStatus && <p className="mt-4 text-blue-600 font-black flex items-center gap-2 text-sm"><Cloud size={16}/> {uploadStatus}</p>}
+        </div>
       </section>
       <section>
-        <h2 className="font-black border-b border-slate-800 pb-3 mb-6 text-xl text-blue-500 tracking-wider">2. 시간표 관리 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl text-slate-800 tracking-tight flex items-center gap-2">
+          <Settings size={20} className="text-blue-600"/> 2. 시간표 설정 ({localConfig.grade}학년 {globalConfig.day}일차)
+        </h2>
         <div className="flex flex-col gap-3">
           {currentGradeSchedule.map(item => (
-            <div key={item.id} className="flex gap-4 items-center bg-slate-800/30 p-3 rounded-xl border border-slate-800">
-              <span className="w-14 font-black text-slate-500">{item.period}교시</span>
-              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex-1 text-slate-100 font-bold" placeholder="과목" />
-              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg w-24 text-slate-100 text-center font-bold" placeholder="코드" />
-              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex-1 text-slate-100 text-center font-bold tracking-tighter" placeholder="시간" />
+            <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+              <span className="w-16 font-black text-slate-400">{item.period}교시</span>
+              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg flex-1 text-slate-800 font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="과목명" />
+              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg w-24 text-slate-800 text-center font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="코드" />
+              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="bg-white border border-slate-200 p-3 rounded-lg flex-1 text-slate-800 text-center font-bold tracking-tighter outline-none focus:ring-2 focus:ring-blue-500" placeholder="00:00 - 00:00" />
             </div>
           ))}
         </div>
       </section>
       <section>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="font-black text-xl text-blue-500 tracking-wider">3. 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
+          <h2 className="font-black text-xl text-slate-800 tracking-tight flex items-center gap-2">
+            <Users size={20} className="text-blue-600"/> 3. 결시 및 예외 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)
+          </h2>
           <div className="flex gap-3">
-            <button onClick={handleResetClassStudents} className="bg-red-900/30 text-red-400 px-4 py-2 rounded-xl font-black text-xs border border-red-900/50 hover:bg-red-900/50 transition-all">명단 초기화</button>
-            <button onClick={handleAddStudent} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-lg shadow-blue-900/40">+ 학생 추가</button>
+            <button onClick={handleResetClassStudents} className="bg-white text-slate-500 px-4 py-2 rounded-xl font-bold text-xs border border-slate-200 hover:bg-slate-50 transition-all">명단 초기화</button>
+            <button onClick={handleAddStudent} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md hover:bg-blue-700 transition-all">+ 학생 추가</button>
           </div>
         </div>
         <div className="grid grid-cols-4 gap-4">
           {students.map(s => (
-            <div key={s.id} className={`p-4 border rounded-2xl transition-all ${s.isAbsent ? 'bg-red-950/20 border-red-900/50' : 'bg-slate-800/40 border-slate-800'}`}>
+            <div key={s.id} className={`p-4 border rounded-2xl transition-all shadow-sm ${s.isAbsent ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
               <div className="flex items-center gap-3 mb-3">
-                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-5 h-5 rounded-md accent-blue-600" />
+                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-5 h-5 rounded-md accent-blue-600 cursor-pointer" />
                 <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-black text-lg">
-                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="bg-transparent border-b-2 border-blue-500 w-full outline-none" /> : s.name}
+                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="bg-transparent border-b-2 border-blue-400 w-full outline-none" /> : s.name}
                 </span>
-                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-600 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
               </div>
               {s.isAbsent && (
-                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold text-slate-300 outline-none focus:border-red-500">
+                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full bg-white border border-red-200 rounded-lg p-2 text-sm font-bold text-red-600 outline-none">
                   <option value="질병">질병</option><option value="인정">인정</option><option value="미인정">미인정</option><option value="기타">기타</option><option value="전출">전출</option><option value="위탁">위탁</option>
                 </select>
               )}
@@ -335,25 +342,27 @@ export default function App() {
           ))}
         </div>
       </section>
-      <section className="flex flex-col gap-6">
-        <h2 className="font-black border-b border-slate-800 pb-3 text-xl text-blue-500 tracking-wider">4. 전달사항 송출</h2>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="p-6 bg-red-950/20 rounded-2xl border border-red-900/30">
-            <h3 className="text-red-500 font-black mb-4 flex items-center gap-2"><AlertCircle size={20}/> 전체 공통 내용</h3>
-            <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl h-32 mb-4 text-slate-100 outline-none focus:border-red-600 font-bold" placeholder="모든 학년에 표시됩니다." />
-            <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-red-600 text-white font-black py-4 rounded-xl shadow-lg shadow-red-950/50 active:scale-[0.98] transition-all">전체 학년 송출</button>
+      <section className="flex flex-col gap-6 pb-12">
+        <h2 className="font-black border-b border-slate-100 pb-4 text-xl text-slate-800 tracking-tight flex items-center gap-2">
+          <Send size={20} className="text-blue-600"/> 4. 실시간 전달사항 송출
+        </h2>
+        <div className="grid grid-cols-2 gap-8">
+          <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
+            <h3 className="text-slate-800 font-black mb-4 flex items-center gap-2 text-sm uppercase">공통 공지사항</h3>
+            <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full bg-white border border-slate-200 p-4 rounded-xl h-32 mb-4 text-slate-800 outline-none focus:ring-2 focus:ring-red-400 font-bold shadow-sm" placeholder="모든 학년 화면에 표시될 내용을 입력하세요." />
+            <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-slate-700">전체 학년 송출</button>
           </div>
-          <div className="p-6 bg-blue-950/20 rounded-2xl border border-blue-900/30">
-            <h3 className="text-blue-500 font-black mb-4 flex items-center gap-2"><Send size={20}/> 학년별 개별 내용</h3>
-            <div className="flex gap-4 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
+          <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
+            <h3 className="text-slate-800 font-black mb-4 flex items-center gap-2 text-sm uppercase">학년별 선택 공지</h3>
+            <div className="flex gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               {['1','2','3'].map(g => (
-                <label key={g} className="flex gap-2 items-center font-black text-slate-400 cursor-pointer hover:text-slate-100 transition-colors">
-                  <input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} className="w-4 h-4" />{g}학년
+                <label key={g} className="flex gap-2 items-center font-black text-slate-600 cursor-pointer hover:text-blue-600 transition-colors">
+                  <input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} className="w-4 h-4 rounded accent-blue-600" />{g}학년
                 </label>
               ))}
             </div>
-            <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl h-32 mb-4 text-slate-100 outline-none focus:border-blue-600 font-bold" placeholder="선택한 학년에만 표시됩니다." />
-            <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-900/40 active:scale-[0.98] transition-all">선택 학년 송출</button>
+            <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full bg-white border border-slate-200 p-4 rounded-xl h-32 mb-4 text-slate-800 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm" placeholder="선택한 학년의 화면에만 표시됩니다." />
+            <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-blue-700">선택 학년 송출</button>
           </div>
         </div>
       </section>
@@ -361,63 +370,69 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-4 font-sans flex flex-col gap-4 overflow-hidden">
-      <header className="bg-slate-900 p-5 rounded-2xl shadow-2xl border border-slate-800 flex justify-between items-center shrink-0">
-        <div className="flex items-center gap-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-6 font-sans flex flex-col gap-6 overflow-hidden">
+      <header className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center shrink-0">
+        <div className="flex items-center gap-10">
           <div className="flex flex-col">
-            <h1 className="text-2xl font-black text-slate-100 tracking-tighter leading-none">고사 상황판</h1>
-            <span className="text-[10px] font-bold text-blue-500 tracking-[0.3em] uppercase mt-1">Status Board</span>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tighter leading-none">고사 상황판</h1>
+            <span className="text-[9px] font-bold text-blue-500 tracking-[0.3em] uppercase mt-2">Exam Status Dashboard</span>
           </div>
-          <div className="flex gap-5 items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-xs font-black shadow-inner">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-600 uppercase">Grade</span>
-              <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}학년</option>)}
+          <div className="flex gap-6 items-center bg-slate-50 px-5 py-3 rounded-2xl border border-slate-200 text-xs font-black shadow-inner">
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">학년</span>
+              <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
               </select>
             </div>
-            <div className="w-px h-4 bg-slate-800"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-600 uppercase">Class</span>
-              <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n} className="bg-slate-900">{n}반</option>)}
+            <div className="w-px bg-slate-200 h-4"></div>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">반</span>
+              <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
               </select>
             </div>
-            <div className="w-px h-4 bg-slate-800"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-600 uppercase">Day</span>
-              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}일차</option>)}
+            <div className="w-px bg-slate-200 h-4"></div>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">일차</span>
+              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
               </select>
             </div>
-            <div className="w-px h-4 bg-slate-800"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-600 uppercase">Period</span>
-              <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-400 border-b border-blue-500 outline-none font-black cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}교시</option>)}
+            <div className="w-px bg-slate-200 h-4"></div>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">교시</span>
+              <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-600 border-b-2 border-blue-600 outline-none font-black cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
               </select>
             </div>
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setView('dashboard')} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-100 text-slate-900 shadow-xl shadow-white/10' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>상황판</button>
-          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>관리 설정</button>
+          <button onClick={() => setView('dashboard')} className={`px-10 py-3 rounded-2xl font-black text-sm transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-800 text-white shadow-xl shadow-slate-200' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>상황판</button>
+          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-10 py-3 rounded-2xl font-black text-sm transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>관리 설정</button>
         </div>
       </header>
       {view === 'dashboard' ? renderDashboard() : renderAdmin()}
       {showAuthModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-3xl p-10 w-full max-w-sm shadow-2xl border border-slate-800">
-            <h3 className="text-3xl font-black text-slate-100 mb-6 flex items-center gap-2"><Lock size={24}/> 관리자 인증</h3>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[2.5rem] p-12 w-full max-w-sm shadow-2xl border border-white">
+            <div className="text-center mb-10">
+              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-blue-100">
+                <Lock size={36} className="text-blue-600"/>
+              </div>
+              <h3 className="text-3xl font-black text-slate-800 tracking-tight">관리자 인증</h3>
+              <p className="text-slate-400 text-sm font-bold mt-2 uppercase tracking-widest">설정 변경 권한이 필요합니다</p>
+            </div>
             <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-6">
-              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full bg-slate-950 border-2 border-slate-800 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-blue-500 transition-all text-slate-100 font-black shadow-inner" placeholder="••••" autoFocus />
-              {authError && <p className="text-red-500 text-center font-black">{authError}</p>}
-              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-blue-900/40 active:scale-95 transition-all">확인</button>
-              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-600 font-black hover:text-slate-400">취소</button>
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-800 font-black shadow-inner" placeholder="••••" autoFocus />
+              {authError && <p className="text-red-500 text-center font-black animate-bounce text-sm">비밀번호가 올바르지 않습니다.</p>}
+              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-blue-200 active:scale-95 transition-all hover:bg-blue-700">확인</button>
+              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">돌아가기</button>
             </form>
           </div>
         </div>
       )}
-      {isSyncing && <div className="fixed bottom-8 right-8 bg-slate-900/80 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-700 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-400 animate-pulse ring-1 ring-blue-500/20"><Cloud size={14}/> LIVE SYNC ACTIVE</div>}
+      {isSyncing && <div className="fixed bottom-10 right-10 bg-white/90 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-200 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-600 animate-pulse ring-4 ring-blue-50"><Cloud size={14}/> 실시간 동기화 중</div>}
     </div>
   );
 }
