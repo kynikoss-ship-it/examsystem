@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
+// Firebase 설정
 const firebaseConfig = {
   apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
   authDomain: "exam-system-9bcd7.firebaseapp.com",
@@ -54,7 +55,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error(err));
+    signInAnonymously(auth).catch(err => console.error("인증 실패:", err));
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
@@ -70,9 +71,7 @@ export default function App() {
         if (data.globalConfig) setGlobalConfig(data.globalConfig);
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
-        if (data.gradeData) {
-          setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
-        }
+        if (data.gradeData) setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
       }
       setIsSyncing(false);
     });
@@ -126,15 +125,28 @@ export default function App() {
         const rows = text.split(/\r?\n/);
         const directory = {};
         for (let i = 1; i < rows.length; i++) {
-          const cols = rows[i].split(',');
+          const row = rows[i].trim();
+          if (!row) continue;
+          const cols = row.split(',');
           if (cols.length < 4) continue;
-          const key = `${cols[0].trim()}-${cols[1].trim()}`;
+          
+          const grade = cols[0].trim();
+          const cls = cols[1].trim();
+          const num = parseInt(cols[2].trim());
+          const name = cols[3].trim();
+
+          if (isNaN(num)) continue;
+
+          const key = `${grade}-${cls}`;
           if (!directory[key]) directory[key] = [];
-          directory[key].push({ id: parseInt(cols[2]), name: cols[3].trim(), isAbsent: false, absenceReason: '질병' });
+          directory[key].push({ id: num, name: name, isAbsent: false, absenceReason: '질병' });
         }
         await updateGlobalDoc({ studentDirectory: directory });
         setUploadStatus('저장 완료');
-      } catch (err) { setUploadStatus('오류 발생'); }
+      } catch (err) { 
+        console.error(err);
+        setUploadStatus('오류 발생 (브라우저 콘솔 확인)'); 
+      }
     };
     reader.readAsText(file, 'euc-kr');
   };
@@ -200,7 +212,7 @@ export default function App() {
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (passwordInput === '3328') { setIsAuthenticated(true); setShowAuthModal(false); setView('admin'); }
-    else setAuthError('오답');
+    else setAuthError('비밀번호가 틀렸습니다.');
   };
 
   const renderDashboard = () => (
@@ -225,13 +237,13 @@ export default function App() {
           <div className="flex flex-col gap-4 flex-1 justify-center">
             {globalAnnouncement && (
               <div className="p-8 bg-red-950/40 border-l-8 border-red-600 rounded-r-2xl shadow-inner">
-                <span className="text-red-500 text-sm font-black mb-2 block tracking-widest uppercase">Global Notice</span>
+                <span className="text-red-500 text-sm font-black mb-2 block tracking-widest uppercase">전체 공통</span>
                 <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{globalAnnouncement}</p>
               </div>
             )}
             {currentAnnouncement && (
               <div className="p-8 bg-blue-950/40 border-l-8 border-blue-600 rounded-r-2xl shadow-inner">
-                <span className="text-blue-500 text-sm font-black mb-2 block tracking-widest uppercase">{localConfig.grade} Grade Notice</span>
+                <span className="text-blue-500 text-sm font-black mb-2 block tracking-widest uppercase">{localConfig.grade}학년 공지</span>
                 <p className="text-4xl font-black text-slate-100 leading-tight break-keep">{currentAnnouncement}</p>
               </div>
             )}
@@ -257,7 +269,7 @@ export default function App() {
           </div>
         </div>
         <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 flex-1 overflow-y-auto">
-          <h3 className="font-black text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase"><Users size={20}/> Absentee List</h3>
+          <h3 className="font-black text-slate-400 mb-6 flex items-center gap-2 tracking-widest uppercase"><Users size={20}/> 결시자 명단</h3>
           <div className="flex flex-col gap-3">
             {students.filter(s => s.isAbsent).map(s => (
               <div key={s.id} className="p-4 border border-slate-800 rounded-xl flex justify-between items-center bg-slate-800/30">
@@ -357,34 +369,49 @@ export default function App() {
             <span className="text-[10px] font-bold text-blue-500 tracking-[0.3em] uppercase mt-1">Status Board</span>
           </div>
           <div className="flex gap-5 items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-xs font-black shadow-inner">
-            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
-              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}학년</option>)}
-            </select>
-            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
-              {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n} className="bg-slate-900">{n}반</option>)}
-            </select>
-            일차 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none">
-              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}일차</option>)}
-            </select>
-            교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-400 border-b border-blue-500 outline-none font-black">
-              {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}교시</option>)}
-            </select>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 uppercase">Grade</span>
+              <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}학년</option>)}
+              </select>
+            </div>
+            <div className="w-px h-4 bg-slate-800"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 uppercase">Class</span>
+              <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n} className="bg-slate-900">{n}반</option>)}
+              </select>
+            </div>
+            <div className="w-px h-4 bg-slate-800"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 uppercase">Day</span>
+              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-slate-100 border-b border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}일차</option>)}
+              </select>
+            </div>
+            <div className="w-px h-4 bg-slate-800"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 uppercase">Period</span>
+              <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-400 border-b border-blue-500 outline-none font-black cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n} className="bg-slate-900">{n}교시</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setView('dashboard')} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-100 text-slate-900 shadow-xl shadow-white/10' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>DASHBOARD</button>
-          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>ADMIN</button>
+          <button onClick={() => setView('dashboard')} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-100 text-slate-900 shadow-xl shadow-white/10' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>상황판</button>
+          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-8 py-3 rounded-xl font-black text-sm transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`}>관리 설정</button>
         </div>
       </header>
       {view === 'dashboard' ? renderDashboard() : renderAdmin()}
       {showAuthModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-3xl p-10 w-full max-w-sm shadow-2xl border border-slate-800">
-            <h3 className="text-3xl font-black text-slate-100 mb-6 flex items-center gap-2"><Lock size={24}/> Admin</h3>
+            <h3 className="text-3xl font-black text-slate-100 mb-6 flex items-center gap-2"><Lock size={24}/> 관리자 인증</h3>
             <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-6">
               <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full bg-slate-950 border-2 border-slate-800 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-blue-500 transition-all text-slate-100 font-black shadow-inner" placeholder="••••" autoFocus />
-              {authError && <p className="text-red-500 text-center font-black">틀렸습니다.</p>}
-              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-blue-900/40 active:scale-95 transition-all">인증</button>
+              {authError && <p className="text-red-500 text-center font-black">{authError}</p>}
+              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-blue-900/40 active:scale-95 transition-all">확인</button>
               <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-600 font-black hover:text-slate-400">취소</button>
             </form>
           </div>
