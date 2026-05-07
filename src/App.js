@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Maximize2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 
 // ==========================================
 // Firebase 설정
@@ -100,6 +100,7 @@ export default function App() {
   const [imageModalUrl, setImageModalUrl] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [announcementImages, setAnnouncementImages] = useState({});
+  const [allClassesData, setAllClassesData] = useState({});
   const [students, setStudents] = useState([]);
 
   // 항상 최신 gradeData를 참조하기 위한 ref (race condition 방지)
@@ -148,6 +149,29 @@ export default function App() {
 
     return () => { unsubGlobal(); unsubClass(); unsubImages(); };
   }, [user, localConfig.grade, localConfig.class]);
+
+  // 관리자 인증 시에만 모든 학반의 결시 데이터를 구독 (개인정보 최소화)
+  useEffect(() => {
+    if (!user || !db || !isAuthenticated) {
+      setAllClassesData({});
+      return;
+    }
+    const examCollection = collection(db, 'artifacts', appId, 'public', 'data', 'examData');
+    const unsubAll = onSnapshot(examCollection, (snapshot) => {
+      const data = {};
+      snapshot.forEach(docSnap => {
+        // 'class_{grade}_{class}' 형식 문서만 필터링
+        if (docSnap.id.startsWith('class_')) {
+          const parts = docSnap.id.split('_');
+          if (parts.length === 3) {
+            data[`${parts[1]}-${parts[2]}`] = docSnap.data().students || [];
+          }
+        }
+      });
+      setAllClassesData(data);
+    });
+    return () => unsubAll();
+  }, [user, isAuthenticated]);
 
   const stats = useMemo(() => {
     const transfer = students.filter(s => s.isAbsent && s.absenceReason === '전출').length;
@@ -345,13 +369,13 @@ export default function App() {
           <h3 className="font-bold text-slate-400 text-sm flex items-center gap-2 uppercase tracking-widest"><AlertCircle size={20}/> 본부 공지사항</h3>
           <div className="flex flex-col gap-6 flex-1 justify-center">
             {globalAnnouncement && (
-              <div className="p-8 bg-red-50 border-l-8 border-red-500 rounded-r-2xl shadow-sm">
+              <div className="p-6 bg-red-50 border-l-8 border-red-500 rounded-r-2xl shadow-sm">
                 <span className="text-red-600 text-xs font-black mb-3 block tracking-widest uppercase">전체 공통 공지</span>
-                <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{globalAnnouncement}</p>
+                <p className="text-3xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{globalAnnouncement}</p>
               </div>
             )}
             {(currentAnnouncement || announcementImages[localConfig.grade]) && (
-              <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm relative">
+              <div className="p-6 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm relative">
                 <div className="flex items-start justify-between mb-3">
                   <span className="text-blue-600 text-xs font-black tracking-widest uppercase">{localConfig.grade}학년 공지</span>
                   <button
@@ -366,14 +390,14 @@ export default function App() {
                   </button>
                 </div>
                 {currentAnnouncement && (
-                  <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap mb-4">{currentAnnouncement}</p>
+                  <p className="text-3xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap mb-4">{currentAnnouncement}</p>
                 )}
                 {announcementImages[localConfig.grade] && (
                   <img
                     src={announcementImages[localConfig.grade]}
                     alt="공지 이미지"
                     onClick={() => setImageModalUrl(announcementImages[localConfig.grade])}
-                    className="max-h-96 rounded-xl cursor-zoom-in shadow-md hover:opacity-90 transition-opacity ring-1 ring-slate-200"
+                    className="max-h-64 rounded-xl cursor-zoom-in shadow-md hover:opacity-90 transition-opacity ring-1 ring-slate-200"
                   />
                 )}
               </div>
@@ -606,6 +630,54 @@ export default function App() {
             <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all">선택 학년 송출</button>
           </div>
         </div>
+      </section>
+      <section className="pb-12">
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight">5. 전체 학반 결시생 현황</h2>
+        <div className="grid grid-cols-3 gap-5">
+          {['1','2','3'].map(grade => {
+            const gradeTotal = [1,2,3,4,5,6].reduce((sum, cls) => {
+              const list = allClassesData[`${grade}-${cls}`] || [];
+              return sum + list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason)).length;
+            }, 0);
+            return (
+              <div key={grade} className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                <div className="flex justify-between items-baseline mb-4 pb-3 border-b border-slate-200">
+                  <h3 className="font-black text-lg text-slate-800">{grade}학년</h3>
+                  <span className={`text-sm font-black px-3 py-1 rounded-full ${gradeTotal > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>
+                    {gradeTotal}명 결시
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {[1,2,3,4,5,6].map(cls => {
+                    const key = `${grade}-${cls}`;
+                    const list = allClassesData[key] || [];
+                    const absent = list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason));
+                    return (
+                      <div key={cls} className={`p-3 rounded-xl border transition-colors ${absent.length > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="font-black text-slate-700 text-sm">{cls}반</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${absent.length > 0 ? 'bg-red-200 text-red-700' : 'bg-slate-100 text-slate-400'}`}>
+                            {absent.length}명
+                          </span>
+                        </div>
+                        {absent.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {absent.map(s => (
+                              <span key={s.id} className="text-xs bg-white px-2 py-1 rounded-md text-slate-700 ring-1 ring-red-200 font-bold">
+                                {s.name} <span className="text-red-500 font-black">· {s.absenceReason}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-xs text-slate-400">전출·위탁은 결시 집계에서 제외됩니다.</p>
       </section>
     </div>
   );
