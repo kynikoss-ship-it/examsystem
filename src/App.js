@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Settings, MonitorPlay, Users, AlertCircle, Lock, X, Trash2, Plus, Cloud, CloudOff, Send } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Users, AlertCircle, Trash2, Cloud } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -20,7 +20,29 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "school-exam-dashboard"; 
+const appId = "school-exam-dashboard";
+
+// ==========================================
+// 컴포넌트 외부 상수 (렌더마다 재생성 방지)
+// ==========================================
+const DEFAULT_SCHEDULE_DAY = [
+  { id: 1, period: 1, subject: '국어', code: '01', time: '09:00 - 09:45' },
+  { id: 2, period: 2, subject: '과학', code: '04', time: '10:05 - 10:50' },
+  { id: 3, period: 3, subject: '역사', code: '07', time: '11:10 - 11:55' },
+];
+
+const makeDefaultGradeData = () => {
+  const buildSchedules = () => ({
+    '1': DEFAULT_SCHEDULE_DAY.map(s => ({ ...s })),
+    '2': DEFAULT_SCHEDULE_DAY.map(s => ({ ...s })),
+    '3': DEFAULT_SCHEDULE_DAY.map(s => ({ ...s })),
+  });
+  return {
+    '1': { announcement: '', schedules: buildSchedules() },
+    '2': { announcement: '', schedules: buildSchedules() },
+    '3': { announcement: '', schedules: buildSchedules() },
+  };
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -38,23 +60,15 @@ export default function App() {
   const [studentDirectory, setStudentDirectory] = useState({});
   const [uploadStatus, setUploadStatus] = useState('');
 
-  const defaultScheduleDay = [
-    { id: 1, period: 1, subject: '국어', code: '01', time: '09:00 - 09:45' },
-    { id: 2, period: 2, subject: '과학', code: '04', time: '10:05 - 10:50' },
-    { id: 3, period: 3, subject: '역사', code: '07', time: '11:10 - 11:55' },
-  ];
-
-  const defaultGradeData = {
-    '1': { announcement: '', schedules: { '1': [...defaultScheduleDay], '2': [...defaultScheduleDay], '3': [...defaultScheduleDay] } },
-    '2': { announcement: '', schedules: { '1': [...defaultScheduleDay], '2': [...defaultScheduleDay], '3': [...defaultScheduleDay] } },
-    '3': { announcement: '', schedules: { '1': [...defaultScheduleDay], '2': [...defaultScheduleDay], '3': [...defaultScheduleDay] } },
-  };
-
-  const [gradeData, setGradeData] = useState(defaultGradeData);
+  const [gradeData, setGradeData] = useState(makeDefaultGradeData);
   const [targetGrades, setTargetGrades] = useState(['1', '2', '3']);
   const [adminGlobalAnnInput, setAdminGlobalAnnInput] = useState('');
   const [adminGradeAnnInput, setAdminGradeAnnInput] = useState('');
   const [students, setStudents] = useState([]);
+
+  // 항상 최신 gradeData를 참조하기 위한 ref (race condition 방지)
+  const gradeDataRef = useRef(gradeData);
+  useEffect(() => { gradeDataRef.current = gradeData; }, [gradeData]);
 
   useEffect(() => {
     signInAnonymously(auth).catch(err => console.error("인증 실패:", err));
@@ -74,7 +88,7 @@ export default function App() {
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
         if (data.gradeData) {
-          setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
+          setGradeData({ ...makeDefaultGradeData(), ...data.gradeData });
         }
       }
       setIsSyncing(false);
@@ -97,7 +111,7 @@ export default function App() {
     const transfer = students.filter(s => s.isAbsent && s.absenceReason === '전출').length;
     const entrusted = students.filter(s => s.isAbsent && s.absenceReason === '위탁').length;
     const absent = students.filter(s => s.isAbsent && !['전출', '위탁'].includes(s.absenceReason)).length;
-    const total = students.length - transfer - entrusted; 
+    const total = students.length - transfer - entrusted;
     return { total, present: total - absent, absent, transfer, entrusted };
   }, [students]);
 
@@ -161,13 +175,19 @@ export default function App() {
     const grade = localConfig.grade;
     const day = globalConfig.day;
     setGradeData(prev => {
-      const newData = { ...prev };
-      newData[grade].schedules[day] = newData[grade].schedules[day].map(s => s.id === id ? { ...s, [field]: value } : s);
+      // 깊은 복사로 immutability 보장
+      const newData = JSON.parse(JSON.stringify(prev));
+      if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
+      if (!newData[grade].schedules[day]) newData[grade].schedules[day] = DEFAULT_SCHEDULE_DAY.map(s => ({ ...s }));
+      newData[grade].schedules[day] = newData[grade].schedules[day].map(s =>
+        s.id === id ? { ...s, [field]: value } : s
+      );
       return newData;
     });
   };
 
-  const saveSchedule = () => updateGlobalDoc({ gradeData });
+  // ref 사용으로 항상 최신 state를 Firestore에 저장 (race condition 방지)
+  const saveSchedule = () => updateGlobalDoc({ gradeData: gradeDataRef.current });
 
   const handleApplyGlobalAnnouncement = async () => {
     await updateGlobalDoc({ globalAnnouncement: adminGlobalAnnInput });
@@ -175,8 +195,11 @@ export default function App() {
   };
 
   const handleApplyGradeAnnouncement = async () => {
-    const newData = { ...gradeData };
-    targetGrades.forEach(g => { newData[g].announcement = adminGradeAnnInput; });
+    const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
+    targetGrades.forEach(g => {
+      if (!newData[g]) newData[g] = { announcement: '', schedules: {} };
+      newData[g].announcement = adminGradeAnnInput;
+    });
     await updateGlobalDoc({ gradeData: newData });
     setAdminGradeAnnInput('');
   };
@@ -189,6 +212,7 @@ export default function App() {
 
   const handleAbsenceReasonChange = async (id, reason) => {
     const newStudents = students.map(s => s.id === id ? { ...s, absenceReason: reason } : s);
+    setStudents(newStudents);
     await updateClassDoc(newStudents);
   };
 
@@ -312,13 +336,20 @@ export default function App() {
               <div className="flex items-center gap-3 mb-3">
                 <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-5 h-5 rounded-md accent-blue-600" />
                 <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-black text-lg">
-                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="bg-transparent border-b-2 border-blue-400 w-full outline-none" /> : s.name}
+                  {editingStudentId === s.id
+                    ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="bg-transparent border-b-2 border-blue-400 w-full outline-none" />
+                    : s.name}
                 </span>
                 <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={18}/></button>
               </div>
               {s.isAbsent && (
                 <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full bg-white border border-red-200 rounded-lg p-2 text-sm font-bold text-red-600 outline-none">
-                  <option value="질병">질병</option><option value="인정">인정</option><option value="미인정">미인정</option><option value="기타">기타</option><option value="전출">전출</option><option value="위탁">위탁</option>
+                  <option value="질병">질병</option>
+                  <option value="인정">인정</option>
+                  <option value="미인정">미인정</option>
+                  <option value="기타">기타</option>
+                  <option value="전출">전출</option>
+                  <option value="위탁">위탁</option>
                 </select>
               )}
             </div>
