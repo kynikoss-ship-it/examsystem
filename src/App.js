@@ -5,7 +5,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // ==========================================
-// Firebase 설정
+// Firebase 설정 (질문자님 프로젝트 정보)
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
@@ -57,7 +57,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error(err));
+    signInAnonymously(auth).catch(err => console.error("인증 에러:", err));
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
@@ -76,6 +76,8 @@ export default function App() {
         if (data.gradeData) {
           setGradeData(prev => ({ ...defaultGradeData, ...data.gradeData }));
         }
+      } else {
+        setDoc(globalRef, { globalConfig, gradeData: defaultGradeData, globalAnnouncement: '', studentDirectory: {} }, { merge: true });
       }
       setIsSyncing(false);
     });
@@ -203,7 +205,7 @@ export default function App() {
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (passwordInput === '3328') { setIsAuthenticated(true); setShowAuthModal(false); setView('admin'); }
-    else setAuthError('오답');
+    else setAuthError('틀렸습니다.');
   };
 
   const renderDashboard = () => (
@@ -230,7 +232,7 @@ export default function App() {
         </div>
       </div>
       <div className="col-span-3 flex flex-col gap-4">
-        <div className="bg-white rounded-xl border p-4 flex gap-2 text-center">
+        <div className="bg-white rounded-xl border p-4 flex gap-2 text-center text-xs">
           <div className="flex-1 bg-slate-50 p-2 rounded">재적<br/><b className="text-xl">{stats.total}</b></div>
           <div className="flex-1 bg-blue-50 p-2 rounded text-blue-700">응시<br/><b className="text-xl">{stats.present}</b></div>
           <div className="flex-1 bg-red-50 p-2 rounded text-red-600">결시<br/><b className="text-xl">{stats.absent}</b></div>
@@ -239,7 +241,7 @@ export default function App() {
           <h3 className="font-bold mb-4 flex items-center gap-2"><Users size={18}/> 결시자 명단</h3>
           <div className="flex flex-col gap-2">
             {students.filter(s => s.isAbsent).map(s => (
-              <div key={s.id} className="p-3 border rounded-lg flex justify-between bg-red-50">
+              <div key={s.id} className="p-3 border rounded-lg flex justify-between bg-red-50 text-sm">
                 <span><b>{s.id}번</b> {s.name}</span>
                 <span className="text-red-600 font-bold">{s.absenceReason}</span>
               </div>
@@ -253,43 +255,43 @@ export default function App() {
   const renderAdmin = () => (
     <div className="bg-white flex-1 rounded-xl border p-6 overflow-y-auto flex flex-col gap-8">
       <section>
-        <h2 className="font-bold border-b pb-2 mb-4 text-lg">1. 명렬표 CSV 업로드</h2>
-        <input type="file" accept=".csv" onChange={handleFileUpload} className="p-2 border rounded w-full bg-slate-50" />
+        <h2 className="font-bold border-b pb-2 mb-4 text-lg text-slate-800">1. 명렬표 CSV 업로드</h2>
+        <input type="file" accept=".csv" onChange={handleFileUpload} className="p-2 border rounded w-full bg-slate-50 text-sm" />
         {uploadStatus && <p className="mt-2 text-blue-600 font-bold">{uploadStatus}</p>}
       </section>
       <section>
-        <h2 className="font-bold border-b pb-2 mb-4 text-lg">2. 시간표 관리 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
+        <h2 className="font-bold border-b pb-2 mb-4 text-lg text-slate-800">2. 시간표 관리 ({localConfig.grade}학년 {globalConfig.day}일차)</h2>
         <div className="grid grid-cols-1 gap-2">
           {currentGradeSchedule.map(item => (
             <div key={item.id} className="flex gap-2 items-center">
               <span className="w-12 font-bold">{item.period}교시</span>
-              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1" placeholder="과목" />
-              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded w-20" placeholder="코드" />
-              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1" placeholder="시간" />
+              <input type="text" value={item.subject} onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1 text-sm" placeholder="과목" />
+              <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded w-20 text-sm" placeholder="코드" />
+              <input type="text" value={item.time} onChange={(e) => handleScheduleChange(item.id, 'time', e.target.value)} onBlur={saveSchedule} className="border p-2 rounded flex-1 text-sm" placeholder="시간" />
             </div>
           ))}
         </div>
       </section>
       <section>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-bold text-lg">3. 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
+          <h2 className="font-bold text-lg text-slate-800">3. 학생 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
           <div className="flex gap-2">
-            <button onClick={handleResetClassStudents} className="bg-red-50 text-red-700 p-2 rounded font-bold text-sm">명단 초기화</button>
-            <button onClick={handleAddStudent} className="bg-blue-600 text-white p-2 rounded font-bold text-sm">+ 추가</button>
+            <button onClick={handleResetClassStudents} className="bg-red-50 text-red-700 p-2 rounded font-bold text-xs">명단 초기화</button>
+            <button onClick={handleAddStudent} className="bg-blue-600 text-white p-2 rounded font-bold text-xs">+ 추가</button>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {students.map(s => (
-            <div key={s.id} className={`p-3 border rounded-xl ${s.isAbsent ? 'bg-red-50 border-red-200' : 'bg-slate-50'}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-4 h-4" />
-                <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-bold">
-                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="w-full border-b" /> : s.name}
+            <div key={s.id} className={`p-2 border rounded-xl ${s.isAbsent ? 'bg-red-50 border-red-200' : 'bg-slate-50'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <input type="checkbox" checked={s.isAbsent} onChange={() => toggleAbsence(s.id)} className="w-3 h-3" />
+                <span onClick={() => setEditingStudentId(s.id)} className="flex-1 cursor-pointer font-bold text-xs truncate">
+                  {editingStudentId === s.id ? <input value={s.name} onChange={(e) => handleNameChange(s.id, e.target.value)} onBlur={handleNameSave} autoFocus className="w-full border-b outline-none" /> : s.name}
                 </span>
-                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                <button onClick={() => handleDeleteStudent(s.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={12}/></button>
               </div>
               {s.isAbsent && (
-                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full border rounded p-1 text-sm">
+                <select value={s.absenceReason} onChange={(e) => handleAbsenceReasonChange(s.id, e.target.value)} className="w-full border rounded p-1 text-[10px]">
                   <option value="질병">질병</option><option value="인정">인정</option><option value="미인정">미인정</option><option value="기타">기타</option><option value="전출">전출</option><option value="위탁">위탁</option>
                 </select>
               )}
@@ -298,18 +300,18 @@ export default function App() {
         </div>
       </section>
       <section className="flex flex-col gap-4">
-        <h2 className="font-bold border-b pb-2 text-lg">4. 전달사항 송출</h2>
+        <h2 className="font-bold border-b pb-2 text-lg text-slate-800">4. 전달사항 송출</h2>
         <div className="p-4 bg-red-50 rounded-xl">
-          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2" placeholder="전체 공통 내용" />
+          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2 text-sm" placeholder="전체 공통 내용" />
           <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg">전체 적용</button>
         </div>
         <div className="p-4 bg-blue-50 rounded-xl">
           <div className="flex gap-4 mb-3">
             {['1','2','3'].map(g => (
-              <label key={g} className="flex gap-1 items-center font-bold"><input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} />{g}학년</label>
+              <label key={g} className="flex gap-1 items-center font-bold text-sm"><input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} />{g}학년</label>
             ))}
           </div>
-          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2" placeholder="선택 학년 개별 내용" />
+          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full border p-3 rounded-lg h-24 mb-2 text-sm" placeholder="선택 학년 개별 내용" />
           <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">선택 학년 적용</button>
         </div>
       </section>
@@ -317,21 +319,21 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 p-4 font-sans flex flex-col gap-4">
-      <header className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center">
+    <div className="min-h-screen bg-slate-100 text-slate-800 p-4 font-sans flex flex-col gap-4 overflow-hidden">
+      <header className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center shrink-0">
         <div className="flex items-center gap-6">
           <h1 className="text-xl font-black text-blue-800">고사 현황</h1>
           <div className="flex gap-4 items-center bg-slate-50 p-2 rounded-xl border text-sm font-bold">
-            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent border-b border-blue-500">
+            학년 <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent border-b border-blue-500 outline-none">
               {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
             </select>
-            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent border-b border-blue-500">
+            반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent border-b border-blue-500 outline-none">
               {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
             </select>
-            일자 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500">
+            일자 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 outline-none">
               {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
             </select>
-            교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 text-blue-600">
+            교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 text-blue-600 outline-none">
               {[1, 2, 3].map(n => <option key={n} value={n}>{n}교시</option>)}
             </select>
           </div>
@@ -347,15 +349,15 @@ export default function App() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl">
             <h3 className="text-2xl font-black mb-6 flex items-center gap-2"><Lock size={24}/> 관리자 인증</h3>
             <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
-              <input 입력="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full border-2 p-4 rounded-2xl text-center text-2xl tracking-widest outline-none focus:border-blue-500 transition-all" placeholder="비밀번호" autoFocus />
-              {authError && <p className="text-red-500 text-center font-bold">인증 실패</p>}
-              <button 입력="submit" className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">확인</button>
-              <button 입력="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600">취소</button>
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full border-2 p-4 rounded-2xl text-center text-2xl tracking-widest outline-none focus:border-blue-500 transition-all" placeholder="비밀번호" autoFocus />
+              {authError && <p className="text-red-500 text-center font-bold">{authError}</p>}
+              <button type="submit" className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">확인</button>
+              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600">취소</button>
             </form>
           </div>
         </div>
       )}
-      {isSyncing && <div className="fixed bottom-6 right-6 bg-white/80 backdrop-blur px-4 py-2 rounded-full border shadow-xl text-xs font-bold flex items-center gap-2 text-blue-600 animate-pulse"><Cloud size={16}/> 실시간 동기화 중...</div>}
+      {isSyncing && <div className="fixed bottom-6 right-6 bg-white/80 backdrop-blur px-4 py-2 rounded-full border shadow-xl text-[10px] font-bold flex items-center gap-2 text-blue-600 animate-pulse"><Cloud size={14}/> 실시간 동기화 중...</div>}
     </div>
   );
 }
