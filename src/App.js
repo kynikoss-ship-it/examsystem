@@ -328,7 +328,7 @@ export default function App() {
             반 <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent border-b border-blue-500">
               {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
             </select>
-            일차 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500">
+            일자 <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500">
               {[1, 2, 3].map(n => <option key={n} value={n}>{n}일차</option>)}
             </select>
             교시 <select value={globalConfig.period} name="period" onChange={handleGlobalConfigChange} className="bg-transparent border-b border-blue-500 text-blue-600">
