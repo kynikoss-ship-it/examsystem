@@ -256,13 +256,13 @@ export default function App() {
             {globalAnnouncement && (
               <div className="p-8 bg-red-50 border-l-8 border-red-500 rounded-r-2xl shadow-sm">
                 <span className="text-red-600 text-xs font-black mb-3 block tracking-widest uppercase">전체 공통 공지</span>
-                <p className="text-4xl font-black text-slate-800 leading-tight break-keep">{globalAnnouncement}</p>
+                <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{globalAnnouncement}</p>
               </div>
             )}
             {currentAnnouncement && (
               <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm">
                 <span className="text-blue-600 text-xs font-black mb-3 block tracking-widest uppercase">{localConfig.grade}학년 공지</span>
-                <p className="text-4xl font-black text-slate-800 leading-tight break-keep">{currentAnnouncement}</p>
+                <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{currentAnnouncement}</p>
               </div>
             )}
           </div>
