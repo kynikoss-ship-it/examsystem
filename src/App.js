@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Maximize2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -40,7 +40,7 @@ const SUBJECT_CODE_MAP = {
 };
 
 // 이미지 압축 (Firestore 1MB 제한 대응)
-const compressImage = (file, maxWidth = 1400, quality = 0.82) => {
+const compressImage = (file, maxWidth = 1024, quality = 0.75) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -98,6 +98,8 @@ export default function App() {
   const [adminGradeAnnImage, setAdminGradeAnnImage] = useState('');
   const [imageUploadStatus, setImageUploadStatus] = useState('');
   const [imageModalUrl, setImageModalUrl] = useState(null);
+  const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
+  const [announcementImages, setAnnouncementImages] = useState({});
   const [students, setStudents] = useState([]);
 
   // 항상 최신 gradeData를 참조하기 위한 ref (race condition 방지)
@@ -138,7 +140,13 @@ export default function App() {
       }
     });
 
-    return () => { unsubGlobal(); unsubClass(); };
+    // 학년별 공지 이미지는 별도 문서로 분리 (1MB 한도 회피)
+    const imagesRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'announcement_images');
+    const unsubImages = onSnapshot(imagesRef, (docSnap) => {
+      setAnnouncementImages(docSnap.exists() ? (docSnap.data() || {}) : {});
+    });
+
+    return () => { unsubGlobal(); unsubClass(); unsubImages(); };
   }, [user, localConfig.grade, localConfig.class]);
 
   const stats = useMemo(() => {
@@ -238,16 +246,29 @@ export default function App() {
   };
 
   const handleApplyGradeAnnouncement = async () => {
-    const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
-    targetGrades.forEach(g => {
-      if (!newData[g]) newData[g] = { announcement: '', schedules: {} };
-      newData[g].announcement = adminGradeAnnInput;
-      newData[g].announcementImage = adminGradeAnnImage || '';
-    });
-    await updateGlobalDoc({ gradeData: newData });
-    setAdminGradeAnnInput('');
-    setAdminGradeAnnImage('');
-    setImageUploadStatus('');
+    try {
+      // 1) 텍스트 공지는 gradeData 문서에 저장
+      const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
+      targetGrades.forEach(g => {
+        if (!newData[g]) newData[g] = { announcement: '', schedules: {} };
+        newData[g].announcement = adminGradeAnnInput;
+      });
+      await updateGlobalDoc({ gradeData: newData });
+
+      // 2) 이미지는 별도 문서(announcement_images)에 학년별 키로 저장
+      const imagesRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'announcement_images');
+      const imageUpdates = {};
+      targetGrades.forEach(g => { imageUpdates[g] = adminGradeAnnImage || ''; });
+      await setDoc(imagesRef, imageUpdates, { merge: true });
+
+      setAdminGradeAnnInput('');
+      setAdminGradeAnnImage('');
+      setImageUploadStatus('송출 완료');
+      setTimeout(() => setImageUploadStatus(''), 2000);
+    } catch (err) {
+      console.error('학년 공지 송출 실패:', err);
+      setImageUploadStatus(`송출 실패: ${err.message || '알 수 없는 오류'}`);
+    }
   };
 
   const handleAnnouncementImageUpload = async (e) => {
@@ -260,9 +281,10 @@ export default function App() {
     try {
       setImageUploadStatus('압축 중...');
       const compressed = await compressImage(file);
-      const sizeKB = Math.round((compressed.length * 0.75) / 1024);
-      if (sizeKB > 800) {
-        setImageUploadStatus(`크기가 너무 큽니다 (${sizeKB}KB). 더 작은 이미지를 사용하세요.`);
+      // dataURL 자체의 길이가 Firestore에 저장될 실제 크기 (ASCII string)
+      const sizeKB = Math.round(compressed.length / 1024);
+      if (sizeKB > 700) {
+        setImageUploadStatus(`크기가 너무 큽니다 (${sizeKB}KB). 더 작은 이미지를 사용해주세요.`);
         return;
       }
       setAdminGradeAnnImage(compressed);
@@ -328,17 +350,29 @@ export default function App() {
                 <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap">{globalAnnouncement}</p>
               </div>
             )}
-            {(currentAnnouncement || currentGradeData.announcementImage) && (
-              <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm">
-                <span className="text-blue-600 text-xs font-black mb-3 block tracking-widest uppercase">{localConfig.grade}학년 공지</span>
+            {(currentAnnouncement || announcementImages[localConfig.grade]) && (
+              <div className="p-8 bg-blue-50 border-l-8 border-blue-500 rounded-r-2xl shadow-sm relative">
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-blue-600 text-xs font-black tracking-widest uppercase">{localConfig.grade}학년 공지</span>
+                  <button
+                    onClick={() => setExpandedAnnouncement({
+                      grade: localConfig.grade,
+                      announcement: currentAnnouncement,
+                      image: announcementImages[localConfig.grade] || ''
+                    })}
+                    className="bg-white/70 hover:bg-white text-blue-600 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors shadow-sm ring-1 ring-blue-100"
+                  >
+                    <Maximize2 size={12} /> 크게 보기
+                  </button>
+                </div>
                 {currentAnnouncement && (
                   <p className="text-4xl font-black text-slate-800 leading-tight break-keep whitespace-pre-wrap mb-4">{currentAnnouncement}</p>
                 )}
-                {currentGradeData.announcementImage && (
+                {announcementImages[localConfig.grade] && (
                   <img
-                    src={currentGradeData.announcementImage}
+                    src={announcementImages[localConfig.grade]}
                     alt="공지 이미지"
-                    onClick={() => setImageModalUrl(currentGradeData.announcementImage)}
+                    onClick={() => setImageModalUrl(announcementImages[localConfig.grade])}
                     className="max-h-96 rounded-xl cursor-zoom-in shadow-md hover:opacity-90 transition-opacity ring-1 ring-slate-200"
                   />
                 )}
@@ -628,6 +662,36 @@ export default function App() {
               <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">돌아가기</button>
             </form>
           </div>
+        </div>
+      )}
+      {expandedAnnouncement && (
+        <div onClick={() => setExpandedAnnouncement(null)} className="fixed inset-0 bg-white z-50 cursor-pointer overflow-auto">
+          <div className="min-h-full flex flex-col items-center justify-center p-12">
+            <div className="text-blue-600 text-base font-black uppercase tracking-[0.3em] mb-10 px-4 py-2 bg-blue-50 rounded-full ring-1 ring-blue-100">
+              {expandedAnnouncement.grade}학년 공지
+            </div>
+            {expandedAnnouncement.announcement && (
+              <p className="text-7xl font-black leading-tight whitespace-pre-wrap break-keep text-center text-slate-800 mb-12 max-w-6xl">
+                {expandedAnnouncement.announcement}
+              </p>
+            )}
+            {expandedAnnouncement.image && (
+              <img
+                src={expandedAnnouncement.image}
+                alt="공지 이미지"
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl ring-1 ring-slate-200 cursor-default"
+              />
+            )}
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpandedAnnouncement(null); }}
+            className="fixed top-8 right-8 bg-slate-100 hover:bg-slate-200 text-slate-600 p-3 rounded-full transition-colors shadow-md"
+            aria-label="닫기"
+          >
+            <X size={28} />
+          </button>
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 text-slate-400 text-xs font-bold tracking-widest uppercase">화면 아무 곳이나 클릭하면 닫힙니다</div>
         </div>
       )}
       {imageModalUrl && (
