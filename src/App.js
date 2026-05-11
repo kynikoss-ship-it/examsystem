@@ -31,12 +31,12 @@ const DEFAULT_SCHEDULE_DAY = [
   { id: 3, period: 3, subject: '역사', code: '04', time: '11:10 - 11:55' },
 ];
 
-// 과목명 → 과목코드 자동 매핑 테이블
+// 과목명 → 과목코드 자동 매핑 테이블 (시험 미실시 과목인 음악·미술·체육 제외, '교과' 추가)
 const SUBJECT_CODE_MAP = {
+  '교과': '',
   '도덕': '01', '국어': '02', '사회': '03', '역사': '04',
-  '과학': '05', '체육': '06', '음악': '07', '미술': '08',
-  '기술가정': '09', '정보': '10', '수학': '11',
-  '영어': '22', '한문': '33',
+  '과학': '05', '기술가정': '09', '정보': '10',
+  '수학': '11', '영어': '22', '한문': '33',
 };
 
 // 날짜 포맷: ISO date 문자열(YYYY-MM-DD) → "MM/DD (요일)" 또는 fallback
@@ -200,6 +200,21 @@ export default function App() {
   const currentGradeSchedule = (currentGradeData.schedules && currentGradeData.schedules[globalConfig.day]) || [];
   const currentAnnouncement = currentGradeData.announcement || '';
 
+  // 현재 학년 기준, 다른 날짜에 이미 등록된 과목명 집합 ('교과'는 중복 허용이므로 제외)
+  const usedInOtherDays = useMemo(() => {
+    const grade = localConfig.grade;
+    const currentDay = globalConfig.day;
+    const schedules = gradeData[grade]?.schedules || {};
+    const used = new Set();
+    Object.entries(schedules).forEach(([day, items]) => {
+      if (day === currentDay) return;
+      (items || []).forEach(item => {
+        if (item.subject && item.subject !== '교과') used.add(item.subject);
+      });
+    });
+    return used;
+  }, [gradeData, localConfig.grade, globalConfig.day]);
+
   const updateGlobalDoc = async (updates) => {
     if (!user) return;
     const globalRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'global');
@@ -252,28 +267,29 @@ export default function App() {
     updateGlobalDoc({ globalConfig: newConfig });
   };
 
+  // select onChange는 onBlur가 동작하지 않아 즉시 저장 필요. ref도 동시 갱신해서 race 방지.
   const handleScheduleChange = (id, field, value) => {
     const grade = localConfig.grade;
     const day = globalConfig.day;
-    setGradeData(prev => {
-      // 깊은 복사로 immutability 보장
-      const newData = JSON.parse(JSON.stringify(prev));
-      if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
-      if (!newData[grade].schedules[day]) newData[grade].schedules[day] = DEFAULT_SCHEDULE_DAY.map(s => ({ ...s }));
-      newData[grade].schedules[day] = newData[grade].schedules[day].map(s => {
-        if (s.id !== id) return s;
-        const updated = { ...s, [field]: value };
-        // 과목명 입력 시 매핑 테이블에 일치하면 코드 자동 채움
-        if (field === 'subject') {
-          const trimmed = value.trim();
-          if (SUBJECT_CODE_MAP[trimmed]) {
-            updated.code = SUBJECT_CODE_MAP[trimmed];
-          }
+    const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
+    if (!newData[grade]) newData[grade] = { announcement: '', schedules: {} };
+    if (!newData[grade].schedules[day]) {
+      newData[grade].schedules[day] = DEFAULT_SCHEDULE_DAY.map(s => ({ ...s }));
+    }
+    newData[grade].schedules[day] = newData[grade].schedules[day].map(s => {
+      if (s.id !== id) return s;
+      const updated = { ...s, [field]: value };
+      // 과목명 변경 시 매핑 테이블의 키와 일치하면 코드 자동 채움 ('교과'는 빈 문자열로 매핑됨)
+      if (field === 'subject') {
+        const trimmed = value.trim();
+        if (Object.prototype.hasOwnProperty.call(SUBJECT_CODE_MAP, trimmed)) {
+          updated.code = SUBJECT_CODE_MAP[trimmed];
         }
-        return updated;
-      });
-      return newData;
+      }
+      return updated;
     });
+    gradeDataRef.current = newData;
+    setGradeData(newData);
   };
 
   // ref 사용으로 항상 최신 state를 Firestore에 저장 (race condition 방지)
@@ -550,35 +566,48 @@ export default function App() {
           <div className="col-span-2 text-center">종료 시간</div>
         </div>
 
-        <datalist id="subject-list">
-          {Object.keys(SUBJECT_CODE_MAP).map(name => <option key={name} value={name} />)}
-        </datalist>
-
         <div className="flex flex-col gap-2">
           {currentGradeSchedule.map(item => {
             const parts = (item.time || '').split(' - ');
             const startTime = (parts[0] || '').trim();
             const endTime = (parts[1] || '').trim();
+            // 매핑표에 없는 과거 데이터(예: 음악/미술/체육)를 보존하기 위한 플래그
+            const isLegacyValue = item.subject && !Object.prototype.hasOwnProperty.call(SUBJECT_CODE_MAP, item.subject);
             return (
               <div key={item.id} className="grid grid-cols-12 gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors shadow-sm">
                 <div className="col-span-1 flex justify-center">
                   <span className="w-10 h-10 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg font-black text-lg">{item.period}</span>
                 </div>
-                <input
-                  type="text"
-                  list="subject-list"
-                  value={item.subject}
-                  onChange={(e) => handleScheduleChange(item.id, 'subject', e.target.value)}
-                  onBlur={saveSchedule}
-                  placeholder="과목명"
-                  className="col-span-5 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
-                />
+                <select
+                  value={item.subject || ''}
+                  onChange={(e) => {
+                    handleScheduleChange(item.id, 'subject', e.target.value);
+                    saveSchedule();
+                  }}
+                  className="col-span-5 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors cursor-pointer"
+                >
+                  <option value="">— 과목 선택 —</option>
+                  {isLegacyValue && (
+                    <option value={item.subject}>{item.subject} (구 데이터)</option>
+                  )}
+                  {Object.keys(SUBJECT_CODE_MAP).map(name => {
+                    // 현재 선택값은 disabled 처리하지 않음 (자기 자신은 항상 표시되어야 함)
+                    const isUsedElsewhere = usedInOtherDays.has(name) && name !== item.subject;
+                    return (
+                      <option key={name} value={name} disabled={isUsedElsewhere}>
+                        {name}
+                        {SUBJECT_CODE_MAP[name] ? ` (${SUBJECT_CODE_MAP[name]})` : ''}
+                        {isUsedElsewhere ? ' · 다른 날짜 사용 중' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
                 <input
                   type="text"
                   value={item.code}
                   onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)}
                   onBlur={saveSchedule}
-                  placeholder="00"
+                  placeholder="—"
                   className="col-span-2 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-center text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400 transition-colors"
                 />
                 <input
@@ -601,8 +630,8 @@ export default function App() {
         </div>
 
         <p className="mt-3 text-xs text-slate-400 leading-relaxed">
-          💡 과목명 입력 시 코드가 자동 매핑됩니다 ·{' '}
-          <span className="text-slate-500">도덕(01) · 국어(02) · 사회(03) · 역사(04) · 과학(05) · 체육(06) · 음악(07) · 미술(08) · 기술가정(09) · 정보(10) · 수학(11) · 영어(22) · 한문(33)</span>
+          💡 과목 선택 시 코드가 자동 매핑됩니다 · 다른 날짜에 등록된 과목은 비활성화 표시되며 '교과'만 중복 선택이 가능합니다.<br/>
+          <span className="text-slate-500">교과(—) · 도덕(01) · 국어(02) · 사회(03) · 역사(04) · 과학(05) · 기술가정(09) · 정보(10) · 수학(11) · 영어(22) · 한문(33)</span>
         </p>
       </section>
       <section>
