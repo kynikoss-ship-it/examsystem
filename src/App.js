@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Maximize2 } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Maximize2, Lock, Unlock } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
@@ -21,6 +21,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "school-exam-dashboard";
+
+// 관리자 인증 비밀번호
+const ADMIN_PASSWORD = '3328';
+// 공지 영역 잠금 해제 비밀번호 (관리자 비밀번호와 다르게 설정 권장)
+const ANNOUNCEMENT_LOCK_PASSWORD = '3328';
 
 // ==========================================
 // 컴포넌트 외부 상수 (렌더마다 재생성 방지)
@@ -111,6 +116,14 @@ export default function App() {
   const [announcementImages, setAnnouncementImages] = useState({});
   const [allClassesData, setAllClassesData] = useState({});
   const [students, setStudents] = useState([]);
+
+  // 공지 영역 잠금 상태 (기본 잠김) + 잠금 해제 모달
+  const [isAnnouncementLocked, setIsAnnouncementLocked] = useState(true);
+  const [showLockModal, setShowLockModal] = useState(false);
+  const [lockPasswordInput, setLockPasswordInput] = useState('');
+  const [lockError, setLockError] = useState('');
+  // 송출 확인 모달: null | { type: 'global' } | { type: 'grade' }
+  const [sendConfirm, setSendConfirm] = useState(null);
 
   // 항상 최신 gradeData를 참조하기 위한 ref (race condition 방지)
   const gradeDataRef = useRef(gradeData);
@@ -397,10 +410,41 @@ export default function App() {
     updateClassDoc([...students, { id: nextId, name: '새 학생', isAbsent: false, absenceReason: '질병' }]);
   };
 
+  // 관리자 페이지를 벗어나거나 관리자 인증이 풀리면 공지 영역을 자동 재잠금
+  useEffect(() => {
+    if (view !== 'admin' || !isAuthenticated) {
+      setIsAnnouncementLocked(true);
+    }
+  }, [view, isAuthenticated]);
+
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    if (passwordInput === '3328') { setIsAuthenticated(true); setShowAuthModal(false); setView('admin'); }
+    if (passwordInput === ADMIN_PASSWORD) { setIsAuthenticated(true); setShowAuthModal(false); setView('admin'); }
     else setAuthError('비밀번호가 틀렸습니다.');
+  };
+
+  // 공지 잠금 해제 시도
+  const handleUnlockSubmit = (e) => {
+    e.preventDefault();
+    if (lockPasswordInput === ANNOUNCEMENT_LOCK_PASSWORD) {
+      setIsAnnouncementLocked(false);
+      setShowLockModal(false);
+      setLockPasswordInput('');
+      setLockError('');
+    } else {
+      setLockError('비밀번호가 틀렸습니다.');
+    }
+  };
+
+  // 공지 송출 확정 (확인 모달의 "확인" 클릭 시 호출)
+  const executeSend = async () => {
+    if (!sendConfirm) return;
+    if (sendConfirm.type === 'global') {
+      await handleApplyGlobalAnnouncement();
+    } else if (sendConfirm.type === 'grade') {
+      await handleApplyGradeAnnouncement();
+    }
+    setSendConfirm(null);
   };
 
   const renderDashboard = () => (
@@ -669,7 +713,30 @@ export default function App() {
         </div>
       </section>
       <section className="flex flex-col gap-6 pb-12">
-        <h2 className="font-black border-b border-slate-100 pb-4 text-xl tracking-tight">4. 실시간 전달사항 송출</h2>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <h2 className="font-black text-xl tracking-tight">4. 실시간 전달사항 송출</h2>
+          {isAnnouncementLocked ? (
+            <button
+              onClick={() => { setLockPasswordInput(''); setLockError(''); setShowLockModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200 transition-colors ring-1 ring-slate-200"
+            >
+              <Lock size={14} /> 잠금 (해제하려면 클릭)
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsAnnouncementLocked(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"
+            >
+              <Unlock size={14} /> 잠금 해제됨 · 다시 잠그기
+            </button>
+          )}
+        </div>
+
+        {isAnnouncementLocked && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-700 flex items-center gap-2">
+            <Lock size={14} /> 공지 송출·삭제·이미지 첨부는 잠금 해제 후 가능합니다. 우측 상단 자물쇠를 클릭하여 해제하세요.
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">현재 게시 중인 공지</h3>
@@ -687,8 +754,9 @@ export default function App() {
                     <p className="flex-1 text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep">{globalAnnouncement}</p>
                     <button
                       onClick={handleDeleteGlobalAnnouncement}
-                      className="text-red-500 hover:bg-red-100 p-1.5 rounded-md flex-shrink-0 transition-colors"
-                      title="공지 삭제"
+                      disabled={isAnnouncementLocked}
+                      className={`p-1.5 rounded-md flex-shrink-0 transition-colors ${isAnnouncementLocked ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-100'}`}
+                      title={isAnnouncementLocked ? '잠금 해제 필요' : '공지 삭제'}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -713,8 +781,9 @@ export default function App() {
                       </div>
                       <button
                         onClick={() => handleDeleteGradeAnnouncement(g)}
-                        className="text-red-500 hover:bg-red-100 p-1.5 rounded-md flex-shrink-0 transition-colors"
-                        title="공지 삭제"
+                        disabled={isAnnouncementLocked}
+                        className={`p-1.5 rounded-md flex-shrink-0 transition-colors ${isAnnouncementLocked ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-100'}`}
+                        title={isAnnouncementLocked ? '잠금 해제 필요' : '공지 삭제'}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -729,26 +798,50 @@ export default function App() {
         <div className="grid grid-cols-2 gap-8">
           <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
             <h3 className="text-slate-800 font-black mb-4 text-sm uppercase">공통 공지사항</h3>
-            <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} className="w-full bg-white border border-slate-200 p-4 rounded-xl h-32 mb-4 text-slate-800 outline-none focus:ring-2 focus:ring-red-400 font-bold shadow-sm" placeholder="모든 학년에 표시될 내용을 입력하세요." />
-            <button onClick={handleApplyGlobalAnnouncement} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all">전체 학년 송출</button>
+            <textarea
+              value={adminGlobalAnnInput}
+              onChange={(e) => setAdminGlobalAnnInput(e.target.value)}
+              disabled={isAnnouncementLocked}
+              className={`w-full border border-slate-200 p-4 rounded-xl h-32 mb-4 outline-none focus:ring-2 focus:ring-red-400 font-bold shadow-sm transition-colors ${isAnnouncementLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`}
+              placeholder={isAnnouncementLocked ? '잠금 해제 후 입력 가능합니다.' : '모든 학년에 표시될 내용을 입력하세요.'}
+            />
+            <button
+              onClick={() => setSendConfirm({ type: 'global' })}
+              disabled={isAnnouncementLocked || !adminGlobalAnnInput.trim()}
+              className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isAnnouncementLocked || !adminGlobalAnnInput.trim()) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-800 text-white active:scale-[0.98]'}`}
+            >
+              {isAnnouncementLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> 전체 학년 송출 (잠김)</span> : '전체 학년 송출'}
+            </button>
           </div>
           <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
             <h3 className="text-slate-800 font-black mb-4 text-sm uppercase">학년별 선택 공지</h3>
             <div className="flex gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               {['1','2','3'].map(g => (
-                <label key={g} className="flex gap-2 items-center font-black text-slate-600 cursor-pointer hover:text-blue-600">
-                  <input type="checkbox" checked={targetGrades.includes(g)} onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])} className="w-4 h-4 rounded accent-blue-600" />{g}학년
+                <label key={g} className={`flex gap-2 items-center font-black ${isAnnouncementLocked ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 cursor-pointer hover:text-blue-600'}`}>
+                  <input
+                    type="checkbox"
+                    checked={targetGrades.includes(g)}
+                    disabled={isAnnouncementLocked}
+                    onChange={() => setTargetGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])}
+                    className="w-4 h-4 rounded accent-blue-600"
+                  />{g}학년
                 </label>
               ))}
             </div>
-            <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} className="w-full bg-white border border-slate-200 p-4 rounded-xl h-32 mb-4 text-slate-800 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm" placeholder="선택한 학년의 화면에만 표시됩니다." />
+            <textarea
+              value={adminGradeAnnInput}
+              onChange={(e) => setAdminGradeAnnInput(e.target.value)}
+              disabled={isAnnouncementLocked}
+              className={`w-full border border-slate-200 p-4 rounded-xl h-32 mb-4 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm transition-colors ${isAnnouncementLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`}
+              placeholder={isAnnouncementLocked ? '잠금 해제 후 입력 가능합니다.' : '선택한 학년의 화면에만 표시됩니다.'}
+            />
 
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4">
               <div className="flex items-center justify-between mb-3">
                 <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
                   <ImageIcon size={14} /> 이미지 첨부 (선택)
                 </label>
-                {adminGradeAnnImage && (
+                {adminGradeAnnImage && !isAnnouncementLocked && (
                   <button
                     onClick={() => { setAdminGradeAnnImage(''); setImageUploadStatus(''); }}
                     className="text-red-500 hover:text-red-700 text-xs font-black"
@@ -761,7 +854,8 @@ export default function App() {
                 type="file"
                 accept="image/*"
                 onChange={handleAnnouncementImageUpload}
-                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                disabled={isAnnouncementLocked}
+                className={`block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${isAnnouncementLocked ? 'text-slate-300 file:bg-slate-100 file:text-slate-400 cursor-not-allowed' : 'text-slate-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'}`}
               />
               {imageUploadStatus && <p className="mt-3 text-blue-600 font-black text-xs">{imageUploadStatus}</p>}
               {adminGradeAnnImage && (
@@ -771,7 +865,13 @@ export default function App() {
               )}
             </div>
 
-            <button onClick={handleApplyGradeAnnouncement} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all">선택 학년 송출</button>
+            <button
+              onClick={() => setSendConfirm({ type: 'grade' })}
+              disabled={isAnnouncementLocked || targetGrades.length === 0 || (!adminGradeAnnInput.trim() && !adminGradeAnnImage)}
+              className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isAnnouncementLocked || targetGrades.length === 0 || (!adminGradeAnnInput.trim() && !adminGradeAnnImage)) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-[0.98]'}`}
+            >
+              {isAnnouncementLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> 선택 학년 송출 (잠김)</span> : '선택 학년 송출'}
+            </button>
           </div>
         </div>
       </section>
@@ -874,6 +974,77 @@ export default function App() {
               <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">확인</button>
               <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">돌아가기</button>
             </form>
+          </div>
+        </div>
+      )}
+      {showLockModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[2.5rem] p-12 w-full max-w-sm shadow-2xl border border-white">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center ring-1 ring-amber-100">
+                <Lock size={28} className="text-amber-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight text-center mb-2">공지 잠금 해제</h3>
+            <p className="text-xs text-slate-400 text-center mb-8 font-bold">송출·삭제·이미지 첨부를 위해 인증이 필요합니다</p>
+            <form onSubmit={handleUnlockSubmit} className="flex flex-col gap-6">
+              <input
+                type="password"
+                value={lockPasswordInput}
+                onChange={(e) => setLockPasswordInput(e.target.value)}
+                className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-amber-500 focus:bg-white transition-all text-slate-800 font-black shadow-inner"
+                placeholder="••••"
+                autoFocus
+              />
+              {lockError && <p className="text-red-500 text-center font-black animate-bounce text-sm">{lockError}</p>}
+              <button type="submit" className="w-full bg-amber-500 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">잠금 해제</button>
+              <button
+                type="button"
+                onClick={() => { setShowLockModal(false); setLockPasswordInput(''); setLockError(''); }}
+                className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2"
+              >
+                취소
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {sendConfirm && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl">
+            <div className="flex justify-center mb-5">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ${sendConfirm.type === 'global' ? 'bg-red-50 ring-red-100' : 'bg-blue-50 ring-blue-100'}`}>
+                <AlertCircle size={26} className={sendConfirm.type === 'global' ? 'text-red-600' : 'text-blue-600'} />
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-slate-800 tracking-tight text-center mb-3">
+              {sendConfirm.type === 'global' ? '전체 학년에 송출하시겠습니까?' : `${targetGrades.join(', ')}학년에 송출하시겠습니까?`}
+            </h3>
+            <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-200 max-h-40 overflow-auto">
+              <p className="text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep">
+                {sendConfirm.type === 'global' ? adminGlobalAnnInput : adminGradeAnnInput}
+              </p>
+              {sendConfirm.type === 'grade' && adminGradeAnnImage && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 font-black">
+                  <ImageIcon size={12} /> 이미지 1장 포함
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 text-center mb-6 font-bold">송출 후 즉시 학생 화면에 표시됩니다.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSendConfirm(null)}
+                className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black hover:bg-slate-200 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={executeSend}
+                className={`flex-1 text-white py-4 rounded-2xl font-black shadow-lg active:scale-[0.98] transition-all ${sendConfirm.type === 'global' ? 'bg-slate-800' : 'bg-blue-600'}`}
+              >
+                송출
+              </button>
+            </div>
           </div>
         </div>
       )}
