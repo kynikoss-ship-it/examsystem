@@ -497,6 +497,10 @@ export default function App() {
   };
 
   // 공통 좌석 렌더링 컴포넌트 (Dashboard 및 확대 모달에서 재사용)
+  // 작은 화면에서도 인적사항(번호+이름)이 항상 보이도록 카드 구조 단순화:
+  //   - 체크박스를 absolute로 빼서 vertical flow에서 분리
+  //   - 비결시 시 차지하던 빈 grip 영역 제거
+  //   - margin/padding 최소화, justify-center로 중앙 정렬
   const SeatGrid = ({ isExpanded = false }) => (
     <div className={`grid grid-cols-5 grid-rows-6 h-full ${isExpanded ? 'gap-4 p-4' : 'gap-2 pt-6 pb-2 px-2'}`}>
       {Array.from({ length: ROWS }).map((_, rowIndex) => (
@@ -515,49 +519,53 @@ export default function App() {
                 <div
                   draggable
                   onDragStart={(e) => handleDragStart(e, student.id)}
-                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-3' : 'm-[2px] p-2'} rounded-lg flex flex-col justify-between shadow-sm cursor-grab active:cursor-grabbing border ${
+                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[2px] p-1'} rounded-lg flex flex-col items-center justify-center gap-1 shadow-sm cursor-grab active:cursor-grabbing border ${
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
-                  <div className="flex items-center justify-start shrink-0">
-                    <input 
-                      type="checkbox" 
-                      checked={student.isAbsent} 
-                      onChange={() => toggleAbsence(student.id)} 
-                      className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} rounded-sm accent-blue-600 cursor-pointer`} 
-                    />
-                  </div>
+                  {/* 체크박스: absolute 배치 → 셀 높이가 작아도 인적사항 영역 침범 안 함 */}
+                  <input 
+                    type="checkbox" 
+                    checked={student.isAbsent} 
+                    onChange={() => toggleAbsence(student.id)} 
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className={`absolute ${isExpanded ? 'top-2 left-2 w-6 h-6' : 'top-1 left-1 w-3.5 h-3.5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
+                  />
                   
-                  <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
-                    {editingStudentId === student.id ? (
-                      <input 
-                        value={student.name} 
-                        onChange={(e) => handleNameChange(student.id, e.target.value)} 
-                        onBlur={handleNameSave} 
-                        autoFocus 
-                        className={`bg-transparent border-b border-blue-400 w-full outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
-                      />
-                    ) : (
-                      <div className="flex items-baseline justify-center gap-1 w-full px-0.5 overflow-hidden">
-                        <span className={`text-slate-400 font-bold shrink-0 ${isExpanded ? 'text-lg' : 'text-[10px]'}`}>
-                          {student.id}
-                        </span>
-                        <span 
-                          onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                          className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
-                          title={student.name}
-                        >
-                          {student.name}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  {/* 번호 + 이름: 동일 글씨체 (font-black, text-slate-800, 동일 크기) */}
+                  {editingStudentId === student.id ? (
+                    <input 
+                      value={student.name} 
+                      onChange={(e) => handleNameChange(student.id, e.target.value)} 
+                      onBlur={handleNameSave} 
+                      autoFocus 
+                      onClick={(e) => e.stopPropagation()}
+                      className={`bg-transparent border-b border-blue-400 w-[85%] outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
+                    />
+                  ) : (
+                    <div className="flex items-baseline justify-center gap-1.5 w-full px-1 overflow-hidden">
+                      <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>
+                        {student.id}
+                      </span>
+                      <span 
+                        onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
+                        className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
+                        title={student.name}
+                      >
+                        {student.name}
+                      </span>
+                    </div>
+                  )}
 
-                  {student.isAbsent ? (
+                  {/* 결시 사유: 결시일 때만 노출 (비결시 시 공간 차지 안 함) */}
+                  {student.isAbsent && (
                     <select 
                       value={student.absenceReason} 
                       onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
-                      className={`w-full bg-white border border-red-200 rounded text-center font-bold text-red-600 outline-none shrink-0 ${isExpanded ? 'h-8 text-sm p-1' : 'h-5 text-[10px] p-0.5'}`}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className={`bg-white border border-red-200 rounded text-center font-bold text-red-600 outline-none ${isExpanded ? 'h-8 text-sm px-2' : 'h-5 text-[10px] px-1 max-w-[85%]'}`}
                     >
                       <option value="질병">질병</option>
                       <option value="인정">인정</option>
@@ -566,10 +574,6 @@ export default function App() {
                       <option value="전출">전출</option>
                       <option value="위탁">위탁</option>
                     </select>
-                  ) : (
-                    <div className={`flex items-center justify-center opacity-0 group-hover:opacity-100 shrink-0 ${isExpanded ? 'h-8' : 'h-5'}`}>
-                      <GripHorizontal size={isExpanded ? 18 : 12} className="text-slate-300" />
-                    </div>
                   )}
                 </div>
               ) : (
@@ -590,15 +594,15 @@ export default function App() {
           <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
           <div className="flex flex-col justify-evenly flex-1 p-2">
             {currentGradeSchedule.map((item) => (
-              <div key={item.id} className="flex justify-between items-center px-4 py-1.5">
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-xs">{item.period}</span>
+              <div key={item.id} className="flex justify-between items-center px-5 py-2">
+                <div className="flex items-center gap-4">
+                  <span className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-base">{item.period}</span>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-base font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-slate-400 text-xs font-medium">({item.code})</span>
+                    <span className="text-xl font-black text-slate-800 leading-tight">{item.subject}</span>
+                    <span className="text-slate-400 text-sm font-medium">({item.code})</span>
                   </div>
                 </div>
-                <div className="text-lg font-black tracking-tighter text-slate-700">{item.time}</div>
+                <div className="text-2xl font-black tracking-tighter text-slate-700">{item.time}</div>
               </div>
             ))}
           </div>
