@@ -538,13 +538,18 @@ export default function App() {
                         className={`bg-transparent border-b border-blue-400 w-full outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
                       />
                     ) : (
-                      <span 
-                        onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                        className={`font-black text-slate-800 cursor-text truncate w-full text-center px-0.5 ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
-                        title={student.name}
-                      >
-                        {student.name}
-                      </span>
+                      <div className="flex items-baseline justify-center gap-1 w-full px-0.5 overflow-hidden">
+                        <span className={`text-slate-400 font-bold shrink-0 ${isExpanded ? 'text-lg' : 'text-[10px]'}`}>
+                          {student.id}
+                        </span>
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
+                          className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
+                          title={student.name}
+                        >
+                          {student.name}
+                        </span>
+                      </div>
                     )}
                   </div>
 
@@ -579,21 +584,21 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 상단 1/3 영역: 시간표 (좌) / 전달사항 (우) */}
-      <div className="grid grid-cols-2 gap-4 h-1/3 min-h-[250px] shrink-0">
+      {/* 상단 1/3 영역: 시간표 (좌, 2fr) / 전달사항 (우, 3fr) */}
+      <div className="grid grid-cols-[2fr_3fr] gap-4 h-1/3 min-h-[250px] shrink-0">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
           <div className="flex flex-col justify-evenly flex-1 p-2">
             {currentGradeSchedule.map((item) => (
-              <div key={item.id} className="flex justify-between items-center px-6 py-2">
-                <div className="flex items-center gap-4">
-                  <span className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-sm">{item.period}</span>
-                  <div className="flex flex-col">
-                    <span className="text-lg font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-slate-400 text-xs font-medium leading-none">({item.code})</span>
+              <div key={item.id} className="flex justify-between items-center px-4 py-1.5">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-xs">{item.period}</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-black text-slate-800 leading-tight">{item.subject}</span>
+                    <span className="text-slate-400 text-xs font-medium">({item.code})</span>
                   </div>
                 </div>
-                <div className="text-2xl font-black tracking-tighter text-slate-700">{item.time}</div>
+                <div className="text-lg font-black tracking-tighter text-slate-700">{item.time}</div>
               </div>
             ))}
           </div>
@@ -604,9 +609,9 @@ export default function App() {
           <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
               <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col">
-                {globalAnnouncement && <p className="text-base font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1">{globalAnnouncement}</p>}
+                {globalAnnouncement && <p className="text-xl font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1">{globalAnnouncement}</p>}
                 {globalAnnouncementImage && (
-                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-28 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1" />
+                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-40 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1" />
                 )}
               </div>
             ) : (
