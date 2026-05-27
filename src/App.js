@@ -106,6 +106,10 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [editingStudentId, setEditingStudentId] = useState(null);
 
+  // 관리자 페이지 학생 정보 수정 폼 상태
+  const [adminEditingId, setAdminEditingId] = useState(null);
+  const [adminEditForm, setAdminEditForm] = useState({ id: '', name: '' });
+
   const [localConfig, setLocalConfig] = useState({ grade: '2', class: '5' });
   const [globalConfig, setGlobalConfig] = useState({ day: '1', dates: { '1': '', '2': '', '3': '' } });
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
@@ -134,6 +138,10 @@ export default function App() {
   const dragStudentId = useRef(null);
   const gradeDataRef = useRef(gradeData);
   
+  // 전달사항 폰트 크기 자동 조절을 위한 Ref
+  const announcementTextRef = useRef(null);
+  const announcementContainerRef = useRef(null);
+
   useEffect(() => { 
     gradeDataRef.current = gradeData; 
   }, [gradeData]);
@@ -202,6 +210,42 @@ export default function App() {
     });
     return () => unsubAll();
   }, [user, isAuthenticated]);
+
+  // 전달사항 텍스트 폰트 사이즈 자동 조절 (이진 탐색 활용)
+  useEffect(() => {
+    if (view !== 'dashboard' || !globalAnnouncement) return;
+
+    const textEl = announcementTextRef.current;
+    const containerEl = announcementContainerRef.current;
+
+    if (!textEl || !containerEl) return;
+
+    const adjustFontSize = () => {
+      let min = 10;
+      let max = 60; // 최대 폰트 크기 상향
+      let bestFit = min;
+
+      while (min <= max) {
+        let mid = Math.floor((min + max) / 2);
+        textEl.style.fontSize = `${mid}px`;
+
+        // 텍스트 영역 스크롤 높이가 부모 컨테이너보다 작거나 같으면 통과
+        if (textEl.scrollHeight <= containerEl.clientHeight) {
+          bestFit = mid;
+          min = mid + 1;
+        } else {
+          max = mid - 1;
+        }
+      }
+      textEl.style.fontSize = `${bestFit}px`;
+    };
+
+    // DOM 업데이트 후 높이 측정을 위한 지연 실행
+    setTimeout(adjustFontSize, 50);
+    
+    window.addEventListener('resize', adjustFontSize);
+    return () => window.removeEventListener('resize', adjustFontSize);
+  }, [globalAnnouncement, globalAnnouncementImage, view, isSeatMapExpanded]);
 
   const studentsWithSeats = useMemo(() => {
     let patched = [...students];
@@ -433,6 +477,38 @@ export default function App() {
     updateClassDoc(newStudents);
   };
 
+  // 관리자 페이지: 학생 수정 버튼 클릭 처리
+  const handleAdminEditClick = (student) => {
+    setAdminEditingId(student.id);
+    setAdminEditForm({ id: student.id, name: student.name });
+  };
+
+  // 관리자 페이지: 학생 인적사항 저장
+  const handleAdminSaveStudent = () => {
+    const newId = parseInt(adminEditForm.id, 10);
+    if (isNaN(newId)) {
+      alert('번호는 숫자만 입력 가능합니다.');
+      return;
+    }
+
+    // 변경된 번호가 기존 명단에 이미 존재하는 경우 차단 (본인 번호 제외)
+    if (newId !== adminEditingId && studentsWithSeats.some(s => s.id === newId)) {
+      alert('이미 존재하는 번호입니다.');
+      return;
+    }
+
+    const newStudents = studentsWithSeats.map(s => {
+      if (s.id === adminEditingId) {
+        return { ...s, id: newId, name: adminEditForm.name };
+      }
+      return s;
+    });
+
+    setStudents(newStudents);
+    updateClassDoc(newStudents);
+    setAdminEditingId(null);
+  };
+
   useEffect(() => {
     if (view !== 'admin' || !isAuthenticated) {
       setIsAnnouncementLocked(true);
@@ -496,11 +572,6 @@ export default function App() {
     dragStudentId.current = null;
   };
 
-  // 공통 좌석 렌더링 컴포넌트 (Dashboard 및 확대 모달에서 재사용)
-  // 작은 화면에서도 인적사항(번호+이름)이 항상 보이도록 카드 구조 단순화:
-  //   - 체크박스를 absolute로 빼서 vertical flow에서 분리
-  //   - 비결시 시 차지하던 빈 grip 영역 제거
-  //   - margin/padding 최소화, justify-center로 중앙 정렬
   const SeatGrid = ({ isExpanded = false }) => (
     <div className={`grid grid-cols-5 grid-rows-6 h-full ${isExpanded ? 'gap-4 p-4' : 'gap-2 pt-6 pb-2 px-2'}`}>
       {Array.from({ length: ROWS }).map((_, rowIndex) => (
@@ -523,7 +594,6 @@ export default function App() {
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
-                  {/* 체크박스: absolute 배치 → 셀 높이가 작아도 인적사항 영역 침범 안 함 */}
                   <input 
                     type="checkbox" 
                     checked={student.isAbsent} 
@@ -533,7 +603,6 @@ export default function App() {
                     className={`absolute ${isExpanded ? 'top-2 left-2 w-8 h-8' : 'top-1 left-1 w-5 h-5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
                   />
                   
-                  {/* 번호 + 이름 + 결시사유(있을 때): 한 줄에 배치, 동일 글씨 크기 */}
                   <div className="flex items-center justify-center gap-1.5 w-full px-1 overflow-hidden">
                     {editingStudentId === student.id ? (
                       <input 
@@ -588,7 +657,6 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 상단 1/3 영역: 시간표 (좌, 2fr) / 전달사항 (우, 3fr) */}
       <div className="grid grid-cols-[2fr_5fr] gap-4 h-1/3 min-h-[250px] shrink-0">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
@@ -610,12 +678,17 @@ export default function App() {
         
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
-          <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-2">
+          {/* 전달사항 폰트 크기 자동 조절을 위해 overflow-hidden 적용 (스크롤 발생 차단) */}
+          <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
-              <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col">
-                {globalAnnouncement && <p className="text-3xl font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1">{globalAnnouncement}</p>}
+              <div ref={announcementContainerRef} className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col overflow-hidden">
+                {globalAnnouncement && (
+                  <p ref={announcementTextRef} className="font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1 overflow-hidden">
+                    {globalAnnouncement}
+                  </p>
+                )}
                 {globalAnnouncementImage && (
-                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-52 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1" />
+                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-52 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1 shrink-0" />
                 )}
               </div>
             ) : (
@@ -625,7 +698,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 하단 2/3 영역: 자리 배치도 전체화면 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1 min-h-0 relative">
         <div className="flex justify-between items-center mb-3 shrink-0 px-2">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
@@ -658,7 +730,6 @@ export default function App() {
           </div>
         </div>
         
-        {/* CSS Grid의 Fractional(fr) 속성을 통해 가변 화면(1080p 해상도)에 유연하게 꽉 차도록 설계 */}
         <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 shadow-inner overflow-hidden relative">
           <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-300 text-slate-600 text-center px-10 py-1 font-black tracking-[0.5em] rounded-md shadow-sm text-xs z-10">교 탁</div>
           <SeatGrid isExpanded={false} />
@@ -749,9 +820,41 @@ export default function App() {
         </div>
         <div className="grid grid-cols-4 gap-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
           {studentsWithSeats.map(s => (
-            <div key={s.id} className="p-3 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm">
-              <span className="text-sm font-bold text-slate-700">{s.name} <span className="text-[10px] text-slate-400 font-normal ml-1 bg-slate-100 px-1.5 py-0.5 rounded">{s.seatIndex + 1}번</span></span>
-              <button onClick={() => handleDeleteStudent(s.id)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded-md"><Trash2 size={14} /></button>
+            <div key={s.id} className="p-3 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm min-h-[50px]">
+              {adminEditingId === s.id ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2">
+                    <input 
+                      type="number" 
+                      value={adminEditForm.id} 
+                      onChange={e => setAdminEditForm({...adminEditForm, id: e.target.value})} 
+                      className="w-12 border border-slate-300 rounded px-1 text-sm outline-none" 
+                      placeholder="번호" 
+                    />
+                    <input 
+                      type="text" 
+                      value={adminEditForm.name} 
+                      onChange={e => setAdminEditForm({...adminEditForm, name: e.target.value})} 
+                      className="flex-1 border border-slate-300 rounded px-1 text-sm outline-none" 
+                      placeholder="이름" 
+                    />
+                  </div>
+                  <div className="flex justify-end gap-1">
+                    <button onClick={handleAdminSaveStudent} className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded font-bold transition-colors">저장</button>
+                    <button onClick={() => setAdminEditingId(null)} className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded font-bold transition-colors">취소</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <span 
+                    className="text-sm font-bold text-slate-700 cursor-pointer hover:text-blue-600 transition-colors" 
+                    onClick={() => handleAdminEditClick(s)}
+                  >
+                    {s.name} <span className="text-[10px] text-slate-400 font-normal ml-1 bg-slate-100 px-1.5 py-0.5 rounded">{s.id}번 (좌석 {s.seatIndex + 1})</span>
+                  </span>
+                  <button onClick={() => handleDeleteStudent(s.id)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded-md shrink-0"><Trash2 size={14} /></button>
+                </>
+              )}
             </div>
           ))}
           {studentsWithSeats.length === 0 && (
