@@ -530,51 +530,51 @@ export default function App() {
                     onChange={() => toggleAbsence(student.id)} 
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className={`absolute ${isExpanded ? 'top-2 left-2 w-6 h-6' : 'top-1 left-1 w-3.5 h-3.5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
+                    className={`absolute ${isExpanded ? 'top-2 left-2 w-8 h-8' : 'top-1 left-1 w-5 h-5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
                   />
                   
-                  {/* 번호 + 이름: 동일 글씨체 (font-black, text-slate-800, 동일 크기) */}
-                  {editingStudentId === student.id ? (
-                    <input 
-                      value={student.name} 
-                      onChange={(e) => handleNameChange(student.id, e.target.value)} 
-                      onBlur={handleNameSave} 
-                      autoFocus 
-                      onClick={(e) => e.stopPropagation()}
-                      className={`bg-transparent border-b border-blue-400 w-[85%] outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
-                    />
-                  ) : (
-                    <div className="flex items-baseline justify-center gap-1.5 w-full px-1 overflow-hidden">
-                      <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>
-                        {student.id}
-                      </span>
-                      <span 
-                        onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                        className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
-                        title={student.name}
+                  {/* 번호 + 이름 + 결시사유(있을 때): 한 줄에 배치, 동일 글씨 크기 */}
+                  <div className="flex items-center justify-center gap-1.5 w-full px-1 overflow-hidden">
+                    {editingStudentId === student.id ? (
+                      <input 
+                        value={student.name} 
+                        onChange={(e) => handleNameChange(student.id, e.target.value)} 
+                        onBlur={handleNameSave} 
+                        autoFocus 
+                        onClick={(e) => e.stopPropagation()}
+                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
+                      />
+                    ) : (
+                      <>
+                        <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>
+                          {student.id}
+                        </span>
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
+                          className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
+                          title={student.name}
+                        >
+                          {student.name}
+                        </span>
+                      </>
+                    )}
+                    {student.isAbsent && (
+                      <select 
+                        value={student.absenceReason} 
+                        onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={`bg-white border border-red-200 rounded font-black text-red-600 outline-none shrink-0 leading-none ${isExpanded ? 'text-2xl sm:text-3xl px-2 py-0.5' : 'text-xs sm:text-sm px-1 py-0.5'}`}
                       >
-                        {student.name}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 결시 사유: 결시일 때만 노출 (비결시 시 공간 차지 안 함) */}
-                  {student.isAbsent && (
-                    <select 
-                      value={student.absenceReason} 
-                      onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className={`bg-white border border-red-200 rounded text-center font-bold text-red-600 outline-none ${isExpanded ? 'h-8 text-sm px-2' : 'h-5 text-[10px] px-1 max-w-[85%]'}`}
-                    >
-                      <option value="질병">질병</option>
-                      <option value="인정">인정</option>
-                      <option value="미인정">미인정</option>
-                      <option value="기타">기타</option>
-                      <option value="전출">전출</option>
-                      <option value="위탁">위탁</option>
-                    </select>
-                  )}
+                        <option value="질병">질병</option>
+                        <option value="인정">인정</option>
+                        <option value="미인정">미인정</option>
+                        <option value="기타">기타</option>
+                        <option value="전출">전출</option>
+                        <option value="위탁">위탁</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <span className={`text-slate-300 font-bold pointer-events-none ${isExpanded ? 'text-sm' : 'text-[10px]'}`}>빈 자리</span>
@@ -589,7 +589,7 @@ export default function App() {
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
       {/* 상단 1/3 영역: 시간표 (좌, 2fr) / 전달사항 (우, 3fr) */}
-      <div className="grid grid-cols-[2fr_3fr] gap-4 h-1/3 min-h-[250px] shrink-0">
+      <div className="grid grid-cols-[2fr_5fr] gap-4 h-1/3 min-h-[250px] shrink-0">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
           <div className="flex flex-col justify-evenly flex-1 p-2">
@@ -599,7 +599,7 @@ export default function App() {
                   <span className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-base">{item.period}</span>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-xl font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-slate-400 text-sm font-medium">({item.code})</span>
+                    <span className="text-xl font-black text-slate-800 leading-tight">({item.code})</span>
                   </div>
                 </div>
                 <div className="text-2xl font-black tracking-tighter text-slate-700">{item.time}</div>
@@ -613,9 +613,9 @@ export default function App() {
           <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
               <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col">
-                {globalAnnouncement && <p className="text-xl font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1">{globalAnnouncement}</p>}
+                {globalAnnouncement && <p className="text-3xl font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1">{globalAnnouncement}</p>}
                 {globalAnnouncementImage && (
-                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-40 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1" />
+                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-52 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1" />
                 )}
               </div>
             ) : (
