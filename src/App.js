@@ -138,9 +138,9 @@ export default function App() {
   const dragStudentId = useRef(null);
   const gradeDataRef = useRef(gradeData);
   
-  // 전달사항 폰트 크기 자동 조절을 위한 Ref
+  // 전달사항 폰트 크기 자동 조절 상태 (기본 30px)
+  const [announcementFontSize, setAnnouncementFontSize] = useState(30);
   const announcementTextRef = useRef(null);
-  const announcementContainerRef = useRef(null);
 
   useEffect(() => { 
     gradeDataRef.current = gradeData; 
@@ -211,41 +211,29 @@ export default function App() {
     return () => unsubAll();
   }, [user, isAuthenticated]);
 
-  // 전달사항 텍스트 폰트 사이즈 자동 조절 (이진 탐색 활용)
+  // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
+  useEffect(() => {
+    setAnnouncementFontSize(30);
+  }, [globalAnnouncement, globalAnnouncementImage, view]);
+
+  // 컨테이너 크기에 맞춰 점진적으로 폰트 축소 (Layout Thrashing 방지)
   useEffect(() => {
     if (view !== 'dashboard' || !globalAnnouncement) return;
-
-    const textEl = announcementTextRef.current;
-    const containerEl = announcementContainerRef.current;
-
-    if (!textEl || !containerEl) return;
-
-    const adjustFontSize = () => {
-      let min = 10;
-      let max = 60; // 최대 폰트 크기 상향
-      let bestFit = min;
-
-      while (min <= max) {
-        let mid = Math.floor((min + max) / 2);
-        textEl.style.fontSize = `${mid}px`;
-
-        // 텍스트 영역 스크롤 높이가 부모 컨테이너보다 작거나 같으면 통과
-        if (textEl.scrollHeight <= containerEl.clientHeight) {
-          bestFit = mid;
-          min = mid + 1;
-        } else {
-          max = mid - 1;
-        }
+    
+    const checkOverflow = () => {
+      const textEl = announcementTextRef.current;
+      if (!textEl) return;
+      
+      // scrollHeight가 clientHeight를 초과하면 폰트를 1px씩 축소 (최소 12px 제한)
+      if (textEl.scrollHeight > textEl.clientHeight && announcementFontSize > 12) {
+        setAnnouncementFontSize(prev => prev - 1);
       }
-      textEl.style.fontSize = `${bestFit}px`;
     };
 
-    // DOM 업데이트 후 높이 측정을 위한 지연 실행
-    setTimeout(adjustFontSize, 50);
-    
-    window.addEventListener('resize', adjustFontSize);
-    return () => window.removeEventListener('resize', adjustFontSize);
-  }, [globalAnnouncement, globalAnnouncementImage, view, isSeatMapExpanded]);
+    // DOM 업데이트가 완료된 후 크기를 측정하도록 지연 실행
+    const timerId = setTimeout(checkOverflow, 10);
+    return () => clearTimeout(timerId);
+  }, [announcementFontSize, globalAnnouncement, globalAnnouncementImage, view, isSeatMapExpanded]);
 
   const studentsWithSeats = useMemo(() => {
     let patched = [...students];
@@ -477,13 +465,11 @@ export default function App() {
     updateClassDoc(newStudents);
   };
 
-  // 관리자 페이지: 학생 수정 버튼 클릭 처리
   const handleAdminEditClick = (student) => {
     setAdminEditingId(student.id);
     setAdminEditForm({ id: student.id, name: student.name });
   };
 
-  // 관리자 페이지: 학생 인적사항 저장
   const handleAdminSaveStudent = () => {
     const newId = parseInt(adminEditForm.id, 10);
     if (isNaN(newId)) {
@@ -491,7 +477,6 @@ export default function App() {
       return;
     }
 
-    // 변경된 번호가 기존 명단에 이미 존재하는 경우 차단 (본인 번호 제외)
     if (newId !== adminEditingId && studentsWithSeats.some(s => s.id === newId)) {
       alert('이미 존재하는 번호입니다.');
       return;
@@ -657,6 +642,7 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
+      {/* 기존에 유지되던 상단 그리드 레이아웃 구조 복구 완료 */}
       <div className="grid grid-cols-[2fr_5fr] gap-4 h-1/3 min-h-[250px] shrink-0">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
@@ -678,12 +664,15 @@ export default function App() {
         
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
-          {/* 전달사항 폰트 크기 자동 조절을 위해 overflow-hidden 적용 (스크롤 발생 차단) */}
           <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
-              <div ref={announcementContainerRef} className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col overflow-hidden">
+              <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col min-h-0">
                 {globalAnnouncement && (
-                  <p ref={announcementTextRef} className="font-black text-slate-800 leading-relaxed break-keep whitespace-pre-wrap flex-1 overflow-hidden">
+                  <p 
+                    ref={announcementTextRef} 
+                    style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} 
+                    className="font-black text-slate-800 break-keep whitespace-pre-wrap flex-1 overflow-hidden min-h-0"
+                  >
                     {globalAnnouncement}
                   </p>
                 )}
