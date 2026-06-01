@@ -264,7 +264,7 @@ export default function App() {
     const transfer = students.filter(s => s.isAbsent && s.absenceReason === '전출').length;
     const entrusted = students.filter(s => s.isAbsent && s.absenceReason === '위탁').length;
     const absent = students.filter(s => s.isAbsent && !['전출', '위탁'].includes(s.absenceReason)).length;
-    const total = students.length - transfer - entrusted;
+    const total = students.length - transfer;
     return { total, present: total - absent, absent, transfer, entrusted };
   }, [students]);
 
