@@ -619,7 +619,7 @@ export default function App() {
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl px-1 sm:px-1.5 py-0.5 max-w-[3.5rem] sm:max-w-none"
+                        className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 text-xs sm:text-sm md:text-base lg:text-lg 2xl:text-xl px-1 sm:px-1.5 py-0.5 max-w-[3.5rem] sm:max-w-none"
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
@@ -656,7 +656,7 @@ export default function App() {
                   <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-lg shrink-0">{item.period}</span>
                   <div className="flex items-baseline gap-1.5 truncate">
                     <span className="text-2xl 2xl:text-3xl font-black text-slate-800 leading-none">{item.subject}</span>
-                    {item.code && <span className="text-lg 2xl:text-xl font-black text-slate-500 leading-none shrink-0">({item.code})</span>}
+                    {item.code && <span className="text-xl 2xl:text-2xl font-black text-slate-500 leading-none shrink-0">({item.code})</span>}
                   </div>
                 </div>
                 <div className="text-2xl 2xl:text-3xl font-black tracking-tighter text-slate-700 leading-none shrink-0">{item.time}</div>
