@@ -573,7 +573,7 @@ export default function App() {
                 <div
                   draggable
                   onDragStart={(e) => handleDragStart(e, student.id)}
-                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[2px] p-1'} rounded-lg flex flex-col items-center justify-center gap-1 shadow-sm cursor-grab active:cursor-grabbing border ${
+                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[1px] p-0'} rounded-lg flex flex-col items-center justify-center shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
@@ -583,10 +583,10 @@ export default function App() {
                     onChange={() => toggleAbsence(student.id)} 
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className={`absolute ${isExpanded ? 'top-2 left-2 w-8 h-8' : 'top-1 left-1 w-5 h-5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
+                    className={`absolute ${isExpanded ? 'top-2 left-2 w-8 h-8' : 'top-1 left-1 w-4 h-4'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
                   />
                   
-                  <div className="flex items-center justify-center gap-2 w-full px-1 overflow-hidden">
+                  <div className="flex items-center justify-center gap-1.5 w-full h-full px-1 overflow-hidden relative">
                     {editingStudentId === student.id ? (
                       <input 
                         value={student.name} 
@@ -594,16 +594,16 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black ${isExpanded ? 'text-3xl' : 'text-sm sm:text-base'}`} 
+                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[7rem]' : 'text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem]'}`} 
                       />
                     ) : (
                       <>
-                        <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-4xl' : 'text-sm sm:text-base'}`}>
+                        <span className={`font-black text-slate-800 shrink-0 opacity-70 leading-none ${isExpanded ? 'text-5xl' : 'text-xl sm:text-2xl md:text-3xl'}`}>
                           {student.id}
                         </span>
                         <span 
                           onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                          className={`font-black text-slate-800 cursor-text truncate text-center tracking-tight ${isExpanded ? 'text-4xl' : 'text-sm sm:text-base'}`} 
+                          className={`font-black text-slate-800 cursor-text truncate text-center tracking-tighter flex-1 flex items-center justify-center h-full w-full leading-none pt-1 ${isExpanded ? 'text-[8rem]' : 'text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem]'}`} 
                           title={student.name}
                         >
                           {student.name}
@@ -616,7 +616,7 @@ export default function App() {
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`bg-white border border-red-200 rounded font-black text-red-600 outline-none shrink-0 leading-none ${isExpanded ? 'text-2xl sm:text-3xl px-2 py-0.5' : 'text-xs px-1 py-0.5'}`}
+                        className={`absolute ${isExpanded ? 'bottom-2 right-2 text-3xl px-3 py-1' : 'bottom-1 right-1 text-[10px] sm:text-xs px-1 py-0.5'} bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none z-10`}
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
@@ -640,43 +640,43 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 2:1:2 비율을 위해 grid-cols-5 사용 (col-span-2, col-span-1, col-span-2) */}
-      <div className="grid grid-cols-5 gap-4 h-[42%] min-h-[300px] shrink-0">
+      {/* 1:1:2 비율을 위해 grid-cols-4 사용 (col-span-1, col-span-1, col-span-2) */}
+      <div className="grid grid-cols-4 gap-4 h-[42%] min-h-[300px] shrink-0">
         
-        {/* 금일 시험 시간표 (비율 2) */}
-        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+        {/* 금일 시험 시간표 (비율 1) */}
+        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
-          <div className="flex flex-col justify-evenly flex-1 p-3">
+          <div className="flex flex-col justify-evenly flex-1 p-2">
             {currentGradeSchedule.map((item) => (
-              <div key={item.id} className="flex justify-between items-center px-5 py-3">
-                <div className="flex items-center gap-4">
-                  <span className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-xl">{item.period}</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-2xl font-black text-slate-800 leading-tight opacity-70">({item.code})</span>
+              <div key={item.id} className="flex flex-col items-center justify-center px-2 py-2 gap-2 flex-1 border-b border-slate-100 last:border-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-lg">{item.period}</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl 2xl:text-4xl font-black text-slate-800 leading-none">{item.subject}</span>
                   </div>
                 </div>
-                <div className="text-3xl font-black tracking-tighter text-slate-700">{item.time}</div>
+                {/* 시간을 과목 크기와 동일하게 (text-3xl 2xl:text-4xl) */}
+                <div className="text-3xl 2xl:text-4xl font-black tracking-tighter text-slate-700 leading-none">{item.time}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* 응시 현황 (비율 1) */}
-        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center items-center h-full relative">
-            <h3 className="absolute top-4 left-0 w-full text-center font-bold text-slate-400 text-sm uppercase tracking-widest pb-3 border-b border-slate-100">응시 현황</h3>
-            <div className="flex flex-col gap-6 w-full px-4 mt-8">
-                <div className="flex justify-between items-end border-b border-slate-50 pb-2">
-                    <span className="text-lg font-bold text-slate-500 mb-1">재적</span>
-                    <span className="text-4xl font-black text-slate-800">{stats.total}</span>
+        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+            <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">응시 현황</div>
+            <div className="flex flex-col justify-evenly flex-1 p-2">
+                <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
+                    <span className="text-3xl 2xl:text-4xl font-black text-slate-500 leading-none">재적</span>
+                    <span className="text-3xl 2xl:text-4xl font-black text-slate-800 leading-none">{stats.total}</span>
                 </div>
-                <div className="flex justify-between items-end border-b border-slate-50 pb-2">
-                    <span className="text-lg font-bold text-blue-500 mb-1">응시</span>
-                    <span className="text-4xl font-black text-blue-600">{stats.present}</span>
+                <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
+                    <span className="text-3xl 2xl:text-4xl font-black text-blue-500 leading-none">응시</span>
+                    <span className="text-3xl 2xl:text-4xl font-black text-blue-600 leading-none">{stats.present}</span>
                 </div>
-                <div className="flex justify-between items-end">
-                    <span className="text-lg font-bold text-red-500 mb-1">결시</span>
-                    <span className="text-4xl font-black text-red-600">{stats.absent}</span>
+                <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
+                    <span className="text-3xl 2xl:text-4xl font-black text-red-500 leading-none">결시</span>
+                    <span className="text-3xl 2xl:text-4xl font-black text-red-600 leading-none">{stats.absent}</span>
                 </div>
             </div>
         </div>
