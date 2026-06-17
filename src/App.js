@@ -573,25 +573,25 @@ export default function App() {
                 <div
                   draggable
                   onDragStart={(e) => handleDragStart(e, student.id)}
-                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[1px] p-0'} rounded-lg flex flex-col items-center justify-center shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
+                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[1px] p-1'} rounded-lg flex flex-col shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
-                  <div className={`absolute ${isExpanded ? 'top-2 left-2' : 'top-1 left-1'} flex items-center gap-1 z-10`}>
+                  <div className="flex items-center gap-1 z-10 shrink-0 mb-1">
                     <input 
                       type="checkbox" 
                       checked={student.isAbsent} 
                       onChange={() => toggleAbsence(student.id)} 
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`${isExpanded ? 'w-8 h-8' : 'w-4 h-4'} rounded-sm accent-blue-600 cursor-pointer`} 
+                      className={`${isExpanded ? 'w-8 h-8' : 'w-4 h-4 sm:w-5 sm:h-5'} rounded-sm accent-blue-600 cursor-pointer shrink-0`} 
                     />
-                    <span className={`font-black text-slate-800 opacity-70 leading-none ${isExpanded ? 'text-3xl' : 'text-xs sm:text-sm'}`}>
+                    <span className={`font-black text-slate-800 opacity-70 leading-none shrink-0 ${isExpanded ? 'text-[4.5rem]' : 'text-lg sm:text-xl md:text-2xl lg:text-3xl'}`}>
                       {student.id}
                     </span>
                   </div>
                   
-                  <div className="flex items-center justify-center gap-1.5 w-full h-full px-1 overflow-hidden relative">
+                  <div className={`flex flex-1 items-center gap-1 sm:gap-2 w-full min-h-0 ${student.isAbsent ? 'justify-between' : 'justify-center'}`}>
                     {editingStudentId === student.id ? (
                       <input 
                         value={student.name} 
@@ -599,12 +599,12 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[5.5rem]' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'}`} 
+                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[5rem]' : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'}`} 
                       />
                     ) : (
                       <span 
                         onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                        className={`font-black text-slate-800 cursor-text truncate text-center tracking-tighter flex items-center justify-center h-full w-full leading-none pt-1 ${isExpanded ? 'text-[6rem]' : 'text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem]'}`} 
+                        className={`font-black text-slate-800 cursor-text truncate tracking-tighter flex items-center h-full w-full min-w-0 flex-1 leading-none ${student.isAbsent ? 'justify-start text-left' : 'justify-center text-center'} ${isExpanded ? 'text-[5rem]' : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'}`} 
                         title={student.name}
                       >
                         {student.name}
@@ -616,7 +616,7 @@ export default function App() {
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`absolute ${isExpanded ? 'bottom-2 right-2 text-3xl px-3 py-1' : 'bottom-1 right-1 text-[10px] sm:text-xs px-1 py-0.5'} bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none z-10`}
+                        className={`bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 ${isExpanded ? 'text-[4.5rem] px-2 py-1' : 'text-lg sm:text-xl md:text-2xl lg:text-3xl px-1 py-0.5'}`}
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
