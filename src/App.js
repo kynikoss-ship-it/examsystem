@@ -303,37 +303,47 @@ const handleFileUpload = (e) => {
       const text = event.target.result;
       const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
       const directory = {};
+
       for (let i = 1; i < rows.length; i++) {
         const cols = rows[i].split(',');
         if (cols.length < 4) continue;
-        const key = `${cols[0].trim()}-${cols[1].trim()}`;
-        if (!directory[key]) directory[key] = [];
 
-        directory[key].push({
-          id: parseInt(cols[2]),
-          name: cols[3].trim(),
-          isAbsent: false,
-          absenceReason: '질병'
-        });
+        const grade = cols[0].trim();
+        const cls = cols[1].trim();
+        const idNum = parseInt(cols[2].trim(), 10);
+        const name = cols[3].trim();
+
+        if (!grade || !cls || isNaN(idNum) || !name) {
+          console.warn(`스킵된 행 ${i + 1}:`, rows[i]);
+          continue;
+        }
+
+        const key = `${grade}-${cls}`;
+        if (!directory[key]) directory[key] = [];
+        directory[key].push({ id: idNum, name, isAbsent: false, absenceReason: '질병' });
       }
+
+      console.log('파싱된 학반 키 목록:', Object.keys(directory));
 
       await updateGlobalDoc({ studentDirectory: directory });
 
-      // ▼ 추가: 모든 반의 class_* 문서에도 즉시 반영
-      const writes = Object.entries(directory).map(([key, list]) => {
+      const writeResults = [];
+      for (const [key, list] of Object.entries(directory)) {
         const [grade, cls] = key.split('-');
-        const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', `class_${grade}_${cls}`);
-        return setDoc(classRef, { students: list }, { merge: true });
-      });
-      await Promise.all(writes);
-      // ▲ 추가 끝
+        const docId = `class_${grade}_${cls}`;
+        const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', docId);
+        console.log(`쓰기 시도: ${docId}, 학생 수: ${list.length}`);
+        await setDoc(classRef, { students: list }, { merge: false }); // merge:false로 완전 교체
+        writeResults.push(docId);
+      }
 
-      setStudentDirectory(directory); // 로컬 상태도 즉시 갱신 (선택)
-      setUploadStatus('데이터 저장 및 반영 완료');
-} catch (err) { 
-  console.error('CSV 업로드 오류:', err);
-  setUploadStatus(`오류 발생: ${err.message}`); 
-}
+      console.log('쓰기 완료된 문서:', writeResults);
+      setStudentDirectory(directory);
+      setUploadStatus(`데이터 저장 및 반영 완료 (${writeResults.length}개 학반)`);
+    } catch (err) {
+      console.error('CSV 업로드 오류:', err);
+      setUploadStatus(`오류 발생: ${err.message}`);
+    }
   };
   reader.readAsText(file, 'euc-kr');
 };
