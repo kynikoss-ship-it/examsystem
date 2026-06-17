@@ -293,35 +293,47 @@ export default function App() {
     await setDoc(classRef, { students: newStudents }, { merge: true });
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadStatus('업로드 중...');
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const text = event.target.result;
-        const rows = text.split(/\r?\n/);
-        const directory = {};
-        for (let i = 1; i < rows.length; i++) {
-          const cols = rows[i].split(',');
-          if (cols.length < 4) continue;
-          const key = `${cols[0].trim()}-${cols[1].trim()}`;
-          if (!directory[key]) directory[key] = [];
-          
-          directory[key].push({ 
-            id: parseInt(cols[2]), 
-            name: cols[3].trim(), 
-            isAbsent: false, 
-            absenceReason: '질병'
-          });
-        }
-        await updateGlobalDoc({ studentDirectory: directory });
-        setUploadStatus('데이터 저장 완료');
-      } catch (err) { setUploadStatus('오류 발생'); }
-    };
-    reader.readAsText(file, 'euc-kr');
+const handleFileUpload = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setUploadStatus('업로드 중...');
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const text = event.target.result;
+      const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+      const directory = {};
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(',');
+        if (cols.length < 4) continue;
+        const key = `${cols[0].trim()}-${cols[1].trim()}`;
+        if (!directory[key]) directory[key] = [];
+
+        directory[key].push({
+          id: parseInt(cols[2]),
+          name: cols[3].trim(),
+          isAbsent: false,
+          absenceReason: '질병'
+        });
+      }
+
+      await updateGlobalDoc({ studentDirectory: directory });
+
+      // ▼ 추가: 모든 반의 class_* 문서에도 즉시 반영
+      const writes = Object.entries(directory).map(([key, list]) => {
+        const [grade, cls] = key.split('-');
+        const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', `class_${grade}_${cls}`);
+        return setDoc(classRef, { students: list }, { merge: true });
+      });
+      await Promise.all(writes);
+      // ▲ 추가 끝
+
+      setStudentDirectory(directory); // 로컬 상태도 즉시 갱신 (선택)
+      setUploadStatus('데이터 저장 및 반영 완료');
+    } catch (err) { setUploadStatus('오류 발생'); }
   };
+  reader.readAsText(file, 'euc-kr');
+};
 
   const handleResetClassStudents = async () => {
     if (!window.confirm('명단을 초기화 하시겠습니까?')) return;
