@@ -330,7 +330,10 @@ const handleFileUpload = (e) => {
 
       setStudentDirectory(directory); // 로컬 상태도 즉시 갱신 (선택)
       setUploadStatus('데이터 저장 및 반영 완료');
-    } catch (err) { setUploadStatus('오류 발생'); }
+} catch (err) { 
+  console.error('CSV 업로드 오류:', err);
+  setUploadStatus(`오류 발생: ${err.message}`); 
+}
   };
   reader.readAsText(file, 'euc-kr');
 };
