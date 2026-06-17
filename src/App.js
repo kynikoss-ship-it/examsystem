@@ -110,7 +110,7 @@ export default function App() {
   const [adminEditingId, setAdminEditingId] = useState(null);
   const [adminEditForm, setAdminEditForm] = useState({ id: '', name: '' });
 
-  const [localConfig, setLocalConfig] = useState({ grade: '2', class: '5' });
+  const [localConfig, setLocalConfig] = useState({ grade: '1', class: '1' });
   const [globalConfig, setGlobalConfig] = useState({ day: '1', dates: { '1': '', '2': '', '3': '' } });
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
   const [globalAnnouncementImage, setGlobalAnnouncementImage] = useState('');
@@ -138,8 +138,8 @@ export default function App() {
   const dragStudentId = useRef(null);
   const gradeDataRef = useRef(gradeData);
   
-  // 전달사항 폰트 크기 자동 조절 상태 (기본 30px)
-  const [announcementFontSize, setAnnouncementFontSize] = useState(30);
+  // 전달사항 폰트 크기 자동 조절 상태 (기본 22px, 시간표 확대로 인해 기본값 축소)
+  const [announcementFontSize, setAnnouncementFontSize] = useState(22);
   const announcementTextRef = useRef(null);
 
   useEffect(() => { 
@@ -213,7 +213,7 @@ export default function App() {
 
   // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
   useEffect(() => {
-    setAnnouncementFontSize(30);
+    setAnnouncementFontSize(22);
   }, [globalAnnouncement, globalAnnouncementImage, view]);
 
   // 컨테이너 크기에 맞춰 점진적으로 폰트 축소 (Layout Thrashing 방지)
@@ -642,21 +642,21 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 기존에 유지되던 상단 그리드 레이아웃 구조 복구 완료 */}
-      <div className="grid grid-cols-[2fr_5fr] gap-4 h-1/3 min-h-[250px] shrink-0">
+      {/* 시험 시간표 비중 확대: 2fr_5fr -> 7fr_5fr 로 변경하여 시간표 영역을 더 넓게 확보 */}
+      <div className="grid grid-cols-[7fr_5fr] gap-4 h-[42%] min-h-[300px] shrink-0">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-          <div className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200 p-2.5 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
-          <div className="flex flex-col justify-evenly flex-1 p-2">
+          <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
+          <div className="flex flex-col justify-evenly flex-1 p-3">
             {currentGradeSchedule.map((item) => (
-              <div key={item.id} className="flex justify-between items-center px-5 py-2">
-                <div className="flex items-center gap-4">
-                  <span className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-500 text-base">{item.period}</span>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-xl font-black text-slate-800 leading-tight">({item.code})</span>
+              <div key={item.id} className="flex justify-between items-center px-7 py-3">
+                <div className="flex items-center gap-6">
+                  <span className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-2xl">{item.period}</span>
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-4xl font-black text-slate-800 leading-tight">{item.subject}</span>
+                    <span className="text-4xl font-black text-slate-800 leading-tight">({item.code})</span>
                   </div>
                 </div>
-                <div className="text-2xl font-black tracking-tighter text-slate-700">{item.time}</div>
+                <div className="text-5xl font-black tracking-tighter text-slate-700">{item.time}</div>
               </div>
             ))}
           </div>
