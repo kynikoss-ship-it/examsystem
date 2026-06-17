@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Maximize2, Lock, Unlock, GripHorizontal } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
@@ -132,9 +132,6 @@ export default function App() {
   const [lockError, setLockError] = useState('');
   const [sendConfirm, setSendConfirm] = useState(null);
 
-  // 자리배치도 모달 상태
-  const [isSeatMapExpanded, setIsSeatMapExpanded] = useState(false);
-
   const dragStudentId = useRef(null);
   const gradeDataRef = useRef(gradeData);
   
@@ -231,7 +228,7 @@ export default function App() {
 
     const timerId = setTimeout(checkOverflow, 10);
     return () => clearTimeout(timerId);
-  }, [announcementFontSize, globalAnnouncement, globalAnnouncementImage, view, isSeatMapExpanded]);
+  }, [announcementFontSize, globalAnnouncement, globalAnnouncementImage, view]);
 
   const studentsWithSeats = useMemo(() => {
     let patched = [...students];
@@ -555,8 +552,8 @@ export default function App() {
     dragStudentId.current = null;
   };
 
-  const SeatGrid = ({ isExpanded = false }) => (
-    <div className={`grid grid-cols-5 grid-rows-6 h-full ${isExpanded ? 'gap-4 p-4' : 'gap-2 pt-6 pb-2 px-2'}`}>
+  const SeatGrid = () => (
+    <div className="grid grid-cols-5 grid-rows-6 h-full gap-2 pt-2 pb-2 px-2">
       {Array.from({ length: ROWS }).map((_, rowIndex) => (
         Array.from({ length: COLS }).map((_, colIndex) => {
           const logicalSeatIndex = colIndex * ROWS + rowIndex;
@@ -567,31 +564,31 @@ export default function App() {
               key={`seat-${logicalSeatIndex}`}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, logicalSeatIndex)}
-              className={`rounded-xl flex flex-col justify-center items-center relative transition-colors bg-white/50 border-2 border-dashed border-slate-300 w-full h-full`}
+              className="rounded-xl flex flex-col justify-center items-center relative transition-colors bg-white/50 border-2 border-dashed border-slate-300 w-full h-full"
             >
               {student ? (
                 <div
                   draggable
                   onDragStart={(e) => handleDragStart(e, student.id)}
-                  className={`absolute inset-0 ${isExpanded ? 'm-1 p-2' : 'm-[1px] p-1'} rounded-lg flex flex-col shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
+                  className={`absolute inset-0 m-[1px] p-1.5 rounded-lg flex flex-col shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
-                  <div className="flex items-center gap-1 z-10 shrink-0 mb-1">
+                  <div className="flex items-center gap-1 z-10 shrink-0 mb-0.5">
                     <input 
                       type="checkbox" 
                       checked={student.isAbsent} 
                       onChange={() => toggleAbsence(student.id)} 
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`${isExpanded ? 'w-8 h-8' : 'w-4 h-4 sm:w-5 sm:h-5'} rounded-sm accent-blue-600 cursor-pointer shrink-0`} 
+                      className="w-4 h-4 sm:w-5 sm:h-5 rounded-sm accent-blue-600 cursor-pointer shrink-0" 
                     />
-                    <span className={`font-black text-slate-800 opacity-70 leading-none shrink-0 ${isExpanded ? 'text-[4.5rem]' : 'text-lg sm:text-xl md:text-2xl lg:text-3xl'}`}>
+                    <span className="font-black text-slate-800 opacity-70 leading-none shrink-0 text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl">
                       {student.id}
                     </span>
                   </div>
                   
-                  <div className={`flex flex-1 items-center gap-1 sm:gap-2 w-full min-h-0 ${student.isAbsent ? 'justify-between' : 'justify-center'}`}>
+                  <div className={`flex flex-1 items-center gap-1.5 sm:gap-2 w-full min-h-0 ${student.isAbsent ? 'justify-between' : 'justify-center'}`}>
                     {editingStudentId === student.id ? (
                       <input 
                         value={student.name} 
@@ -599,12 +596,12 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[5rem]' : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'}`} 
+                        className="bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none text-lg sm:text-xl md:text-2xl lg:text-3xl 2xl:text-4xl" 
                       />
                     ) : (
                       <span 
                         onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                        className={`font-black text-slate-800 cursor-text truncate tracking-tighter flex items-center h-full w-full min-w-0 flex-1 leading-none ${student.isAbsent ? 'justify-start text-left' : 'justify-center text-center'} ${isExpanded ? 'text-[5rem]' : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'}`} 
+                        className={`font-black text-slate-800 cursor-text truncate tracking-tighter flex items-center h-full min-w-0 leading-none ${student.isAbsent ? 'justify-start text-left shrink' : 'justify-center text-center w-full'} text-lg sm:text-xl md:text-2xl lg:text-3xl 2xl:text-4xl`} 
                         title={student.name}
                       >
                         {student.name}
@@ -616,7 +613,7 @@ export default function App() {
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 ${isExpanded ? 'text-[4.5rem] px-2 py-1' : 'text-lg sm:text-xl md:text-2xl lg:text-3xl px-1 py-0.5'}`}
+                        className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 max-w-[45%] text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl px-1 py-0.5"
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
@@ -629,7 +626,7 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <span className={`text-slate-300 font-bold pointer-events-none ${isExpanded ? 'text-sm' : 'text-[10px]'}`}>빈 자리</span>
+                <span className="text-slate-300 font-bold pointer-events-none text-[10px] sm:text-sm">빈 자리</span>
               )}
             </div>
           );
@@ -710,23 +707,17 @@ export default function App() {
 
       {/* 자리 배치도 영역 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1 min-h-0 relative">
-        <div className="flex justify-between items-center mb-3 shrink-0 px-2">
+        <div className="flex justify-between items-center mb-3 shrink-0 px-2 relative min-h-[40px]">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             자리 배치도
           </h3>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsSeatMapExpanded(true)} 
-              className="text-slate-500 hover:text-blue-600 flex items-center gap-1.5 text-xs font-black px-3 py-2 rounded-lg bg-slate-100 hover:bg-blue-50 transition-colors border border-slate-200 hover:border-blue-200"
-            >
-              <Maximize2 size={14} /> 확대
-            </button>
+          <div className="absolute left-1/2 -translate-x-1/2 bg-emerald-800 text-white text-center px-16 sm:px-24 py-1.5 sm:py-2 font-black tracking-[1em] rounded-lg shadow-md text-base sm:text-lg border-[3px] border-emerald-900 flex items-center justify-center z-10">
+            칠 판
           </div>
         </div>
         
         <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 shadow-inner overflow-hidden relative">
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-300 text-slate-600 text-center px-10 py-1 font-black tracking-[0.5em] rounded-md shadow-sm text-xs z-10">교 탁</div>
-          <SeatGrid isExpanded={false} />
+          <SeatGrid />
         </div>
       </div>
     </div>
@@ -1031,30 +1022,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 자리 배치도 꽉 찬 확대 모달 */}
-      {isSeatMapExpanded && (
-        <div className="fixed inset-0 bg-slate-100 z-50 p-8 flex flex-col">
-          <div className="flex justify-between items-center mb-4 shrink-0">
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              자리 배치도 확대보기 <span className="text-base text-slate-400 bg-white px-3 py-1 rounded-full shadow-sm">{localConfig.grade}학년 {localConfig.class}반</span>
-            </h2>
-            <button 
-              onClick={() => setIsSeatMapExpanded(false)} 
-              className="bg-white text-slate-500 hover:text-slate-800 p-3 rounded-full shadow-md border border-slate-200 hover:bg-slate-50 transition-colors"
-            >
-              <X size={28} />
-            </button>
-          </div>
-          
-          <div className="flex-1 bg-white rounded-3xl shadow-xl border border-slate-200 p-8 relative overflow-hidden flex flex-col">
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-300 text-slate-600 text-center px-16 py-2 font-black tracking-[0.5em] rounded-xl shadow-sm text-lg z-10">
-              교 탁
-            </div>
-            <SeatGrid isExpanded={true} />
-          </div>
-        </div>
-      )}
-      
       {/* 이미지 확대 모달 */}
       {imageModalUrl && (
         <div onClick={() => setImageModalUrl(null)} className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-50 p-8 cursor-zoom-out">
