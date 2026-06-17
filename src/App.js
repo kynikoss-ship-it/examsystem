@@ -138,7 +138,7 @@ export default function App() {
   const dragStudentId = useRef(null);
   const gradeDataRef = useRef(gradeData);
   
-  // 전달사항 폰트 크기 자동 조절 상태 (기본 22px, 시간표 확대로 인해 기본값 축소)
+  // 전달사항 폰트 크기 자동 조절 상태 (기본 22px)
   const [announcementFontSize, setAnnouncementFontSize] = useState(22);
   const announcementTextRef = useRef(null);
 
@@ -216,7 +216,7 @@ export default function App() {
     setAnnouncementFontSize(22);
   }, [globalAnnouncement, globalAnnouncementImage, view]);
 
-  // 컨테이너 크기에 맞춰 점진적으로 폰트 축소 (Layout Thrashing 방지)
+  // 컨테이너 크기에 맞춰 점진적으로 폰트 축소
   useEffect(() => {
     if (view !== 'dashboard' || !globalAnnouncement) return;
     
@@ -224,13 +224,11 @@ export default function App() {
       const textEl = announcementTextRef.current;
       if (!textEl) return;
       
-      // scrollHeight가 clientHeight를 초과하면 폰트를 1px씩 축소 (최소 12px 제한)
       if (textEl.scrollHeight > textEl.clientHeight && announcementFontSize > 12) {
         setAnnouncementFontSize(prev => prev - 1);
       }
     };
 
-    // DOM 업데이트가 완료된 후 크기를 측정하도록 지연 실행
     const timerId = setTimeout(checkOverflow, 10);
     return () => clearTimeout(timerId);
   }, [announcementFontSize, globalAnnouncement, globalAnnouncementImage, view, isSeatMapExpanded]);
@@ -588,7 +586,7 @@ export default function App() {
                     className={`absolute ${isExpanded ? 'top-2 left-2 w-8 h-8' : 'top-1 left-1 w-5 h-5'} rounded-sm accent-blue-600 cursor-pointer z-10`} 
                   />
                   
-                  <div className="flex items-center justify-center gap-1.5 w-full px-1 overflow-hidden">
+                  <div className="flex items-center justify-center gap-2 w-full px-1 overflow-hidden">
                     {editingStudentId === student.id ? (
                       <input 
                         value={student.name} 
@@ -596,16 +594,16 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black ${isExpanded ? 'text-2xl' : 'text-xs sm:text-sm'}`} 
+                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black ${isExpanded ? 'text-3xl' : 'text-sm sm:text-base'}`} 
                       />
                     ) : (
                       <>
-                        <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>
+                        <span className={`font-black text-slate-800 shrink-0 ${isExpanded ? 'text-4xl' : 'text-sm sm:text-base'}`}>
                           {student.id}
                         </span>
                         <span 
                           onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                          className={`font-black text-slate-800 cursor-text truncate text-center ${isExpanded ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`} 
+                          className={`font-black text-slate-800 cursor-text truncate text-center tracking-tight ${isExpanded ? 'text-4xl' : 'text-sm sm:text-base'}`} 
                           title={student.name}
                         >
                           {student.name}
@@ -618,7 +616,7 @@ export default function App() {
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`bg-white border border-red-200 rounded font-black text-red-600 outline-none shrink-0 leading-none ${isExpanded ? 'text-2xl sm:text-3xl px-2 py-0.5' : 'text-xs sm:text-sm px-1 py-0.5'}`}
+                        className={`bg-white border border-red-200 rounded font-black text-red-600 outline-none shrink-0 leading-none ${isExpanded ? 'text-2xl sm:text-3xl px-2 py-0.5' : 'text-xs px-1 py-0.5'}`}
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
@@ -642,27 +640,49 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 시험 시간표 비중 확대: 2fr_5fr -> 7fr_5fr 로 변경하여 시간표 영역을 더 넓게 확보 */}
-      <div className="grid grid-cols-[7fr_5fr] gap-4 h-[42%] min-h-[300px] shrink-0">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+      {/* 2:1:2 비율을 위해 grid-cols-5 사용 (col-span-2, col-span-1, col-span-2) */}
+      <div className="grid grid-cols-5 gap-4 h-[42%] min-h-[300px] shrink-0">
+        
+        {/* 금일 시험 시간표 (비율 2) */}
+        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
           <div className="flex flex-col justify-evenly flex-1 p-3">
             {currentGradeSchedule.map((item) => (
-              <div key={item.id} className="flex justify-between items-center px-7 py-3">
-                <div className="flex items-center gap-6">
-                  <span className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-2xl">{item.period}</span>
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="text-4xl font-black text-slate-800 leading-tight">{item.subject}</span>
-                    <span className="text-4xl font-black text-slate-800 leading-tight">({item.code})</span>
+              <div key={item.id} className="flex justify-between items-center px-5 py-3">
+                <div className="flex items-center gap-4">
+                  <span className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-xl">{item.period}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-slate-800 leading-tight">{item.subject}</span>
+                    <span className="text-2xl font-black text-slate-800 leading-tight opacity-70">({item.code})</span>
                   </div>
                 </div>
-                <div className="text-5xl font-black tracking-tighter text-slate-700">{item.time}</div>
+                <div className="text-3xl font-black tracking-tighter text-slate-700">{item.time}</div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* 응시 현황 (비율 1) */}
+        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center items-center h-full relative">
+            <h3 className="absolute top-4 left-0 w-full text-center font-bold text-slate-400 text-sm uppercase tracking-widest pb-3 border-b border-slate-100">응시 현황</h3>
+            <div className="flex flex-col gap-6 w-full px-4 mt-8">
+                <div className="flex justify-between items-end border-b border-slate-50 pb-2">
+                    <span className="text-lg font-bold text-slate-500 mb-1">재적</span>
+                    <span className="text-4xl font-black text-slate-800">{stats.total}</span>
+                </div>
+                <div className="flex justify-between items-end border-b border-slate-50 pb-2">
+                    <span className="text-lg font-bold text-blue-500 mb-1">응시</span>
+                    <span className="text-4xl font-black text-blue-600">{stats.present}</span>
+                </div>
+                <div className="flex justify-between items-end">
+                    <span className="text-lg font-bold text-red-500 mb-1">결시</span>
+                    <span className="text-4xl font-black text-red-600">{stats.absent}</span>
+                </div>
+            </div>
+        </div>
         
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
+        {/* 전달사항 (비율 2) */}
+        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
           <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
@@ -685,31 +705,16 @@ export default function App() {
             )}
           </div>
         </div>
+
       </div>
 
+      {/* 자리 배치도 영역 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1 min-h-0 relative">
         <div className="flex justify-between items-center mb-3 shrink-0 px-2">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             자리 배치도
           </h3>
-          
           <div className="flex items-center gap-4">
-            <div className="flex gap-4 text-sm font-black bg-slate-50 px-4 py-1.5 rounded-xl border border-slate-100 shadow-inner">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400 tracking-widest uppercase">재적</span>
-                <span className="text-slate-800 text-base">{stats.total}</span>
-              </div>
-              <div className="w-px bg-slate-200 h-4 my-auto"></div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-blue-400 tracking-widest uppercase">응시</span>
-                <span className="text-blue-600 text-base">{stats.present}</span>
-              </div>
-              <div className="w-px bg-slate-200 h-4 my-auto"></div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-red-400 tracking-widest uppercase">결시</span>
-                <span className="text-red-600 text-base">{stats.absent}</span>
-              </div>
-            </div>
             <button 
               onClick={() => setIsSeatMapExpanded(true)} 
               className="text-slate-500 hover:text-blue-600 flex items-center gap-1.5 text-xs font-black px-3 py-2 rounded-lg bg-slate-100 hover:bg-blue-50 transition-colors border border-slate-200 hover:border-blue-200"
