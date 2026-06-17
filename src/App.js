@@ -8,7 +8,7 @@ import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/fire
 // Firebase 설정
 // ==========================================
 const firebaseConfig = {
-  apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: "exam-system-9bcd7.firebaseapp.com",
   projectId: "exam-system-9bcd7",
   storageBucket: "exam-system-9bcd7.firebasestorage.app",
