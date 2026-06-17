@@ -564,31 +564,33 @@ export default function App() {
               key={`seat-${logicalSeatIndex}`}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, logicalSeatIndex)}
-              className="rounded-xl flex flex-col justify-center items-center relative transition-colors bg-white/50 border-2 border-dashed border-slate-300 w-full h-full"
+              className="rounded-xl flex items-center justify-center relative transition-colors bg-white/50 border-2 border-dashed border-slate-300 w-full h-full"
             >
               {student ? (
                 <div
                   draggable
                   onDragStart={(e) => handleDragStart(e, student.id)}
-                  className={`absolute inset-0 m-[1px] p-1.5 rounded-lg flex flex-col shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
+                  className={`absolute inset-0 m-[1px] rounded-lg flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing border overflow-hidden ${
                     student.isAbsent ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300 hover:border-blue-400 hover:shadow-md'
                   }`}
                 >
-                  <div className="flex items-center gap-1 z-10 shrink-0 mb-0.5">
+                  {/* 번호 및 체크박스 (좌측 절대 고정) */}
+                  <div className="absolute left-1 sm:left-2 flex items-center gap-1 sm:gap-1.5 z-20">
                     <input 
                       type="checkbox" 
                       checked={student.isAbsent} 
                       onChange={() => toggleAbsence(student.id)} 
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="w-4 h-4 sm:w-5 sm:h-5 rounded-sm accent-blue-600 cursor-pointer shrink-0" 
+                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 rounded-sm accent-blue-600 cursor-pointer shrink-0" 
                     />
-                    <span className="font-black text-slate-800 opacity-70 leading-none shrink-0 text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl">
+                    <span className="font-black text-slate-800 opacity-70 leading-none shrink-0 text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl">
                       {student.id}
                     </span>
                   </div>
                   
-                  <div className={`flex flex-1 items-center gap-1.5 sm:gap-2 w-full min-h-0 ${student.isAbsent ? 'justify-between' : 'justify-center'}`}>
+                  {/* 학생 이름 (정중앙, 고정) */}
+                  <div className="flex-1 flex justify-center items-center w-full px-12 sm:px-14 lg:px-20 z-10 pointer-events-none">
                     {editingStudentId === student.id ? (
                       <input 
                         value={student.name} 
@@ -596,24 +598,28 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className="bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none text-lg sm:text-xl md:text-2xl lg:text-3xl 2xl:text-4xl" 
+                        className="bg-transparent border-b border-blue-400 w-full min-w-0 outline-none text-center font-black leading-none text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl pointer-events-auto" 
                       />
                     ) : (
                       <span 
                         onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                        className={`font-black text-slate-800 cursor-text truncate tracking-tighter flex items-center h-full min-w-0 leading-none ${student.isAbsent ? 'justify-start text-left shrink' : 'justify-center text-center w-full'} text-lg sm:text-xl md:text-2xl lg:text-3xl 2xl:text-4xl`} 
+                        className="font-black text-slate-800 cursor-text truncate tracking-tighter text-center w-full leading-none text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl pointer-events-auto" 
                         title={student.name}
                       >
                         {student.name}
                       </span>
                     )}
-                    {student.isAbsent && (
+                  </div>
+
+                  {/* 결시 사유 드롭박스 (우측 절대 고정, 결시인 경우에만 표시) */}
+                  {student.isAbsent && (
+                    <div className="absolute right-1 sm:right-2 z-20 flex items-center">
                       <select 
                         value={student.absenceReason} 
                         onChange={(e) => handleAbsenceReasonChange(student.id, e.target.value)} 
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 max-w-[45%] text-base sm:text-lg md:text-xl lg:text-2xl 2xl:text-3xl px-1 py-0.5"
+                        className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl px-1 sm:px-1.5 py-0.5 max-w-[3.5rem] sm:max-w-none"
                       >
                         <option value="질병">질병</option>
                         <option value="인정">인정</option>
@@ -622,8 +628,8 @@ export default function App() {
                         <option value="전출">전출</option>
                         <option value="위탁">위탁</option>
                       </select>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <span className="text-slate-300 font-bold pointer-events-none text-[10px] sm:text-sm">빈 자리</span>
