@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal } from 'lucide-react';
+import { 사용자, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/fire
 // Firebase 설정
 // ==========================================
 const firebaseConfig = {
-  apiKey: AIzaSyDuI0jv-wSUORdPL8rDGvkiFiB9KW0wGuw
+  apiKey: "AIzaSyDuI0jv-wSUORdPL8rDGvkiFiB9KW0wGuw"
   authDomain: "exam-system-9bcd7.firebaseapp.com",
   projectId: "exam-system-9bcd7",
   storageBucket: "exam-system-9bcd7.firebasestorage.app",
