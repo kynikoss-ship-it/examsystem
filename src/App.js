@@ -594,16 +594,16 @@ export default function App() {
                         onBlur={handleNameSave} 
                         autoFocus 
                         onClick={(e) => e.stopPropagation()}
-                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[7rem]' : 'text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem]'}`} 
+                        className={`bg-transparent border-b border-blue-400 flex-1 min-w-0 outline-none text-center font-black h-full w-full leading-none ${isExpanded ? 'text-[5.5rem]' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'}`} 
                       />
                     ) : (
                       <>
-                        <span className={`font-black text-slate-800 shrink-0 opacity-70 leading-none ${isExpanded ? 'text-5xl' : 'text-xl sm:text-2xl md:text-3xl'}`}>
+                        <span className={`font-black text-slate-800 shrink-0 opacity-70 leading-none ${isExpanded ? 'text-4xl' : 'text-lg sm:text-xl md:text-2xl'}`}>
                           {student.id}
                         </span>
                         <span 
                           onClick={(e) => { e.stopPropagation(); setEditingStudentId(student.id); }} 
-                          className={`font-black text-slate-800 cursor-text truncate text-center tracking-tighter flex-1 flex items-center justify-center h-full w-full leading-none pt-1 ${isExpanded ? 'text-[8rem]' : 'text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem]'}`} 
+                          className={`font-black text-slate-800 cursor-text truncate text-center tracking-tighter flex-1 flex items-center justify-center h-full w-full leading-none pt-1 ${isExpanded ? 'text-[6rem]' : 'text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem]'}`} 
                           title={student.name}
                         >
                           {student.name}
@@ -640,11 +640,11 @@ export default function App() {
 
   const renderDashboard = () => (
     <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
-      {/* 1:1:2 비율을 위해 grid-cols-4 사용 (col-span-1, col-span-1, col-span-2) */}
-      <div className="grid grid-cols-4 gap-4 h-[42%] min-h-[300px] shrink-0">
+      {/* 3:2:5 비율을 위해 grid-cols-10 사용 (col-span-3, col-span-2, col-span-5) */}
+      <div className="grid grid-cols-10 gap-4 h-[42%] min-h-[300px] shrink-0">
         
-        {/* 금일 시험 시간표 (비율 1) */}
-        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+        {/* 금일 시험 시간표 (비율 3) */}
+        <div className="col-span-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
           <div className="flex flex-col justify-evenly flex-1 p-2">
             {currentGradeSchedule.map((item) => (
@@ -652,37 +652,36 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-lg">{item.period}</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl 2xl:text-4xl font-black text-slate-800 leading-none">{item.subject}</span>
+                    <span className="text-2xl 2xl:text-3xl font-black text-slate-800 leading-none">{item.subject}</span>
                   </div>
                 </div>
-                {/* 시간을 과목 크기와 동일하게 (text-3xl 2xl:text-4xl) */}
-                <div className="text-3xl 2xl:text-4xl font-black tracking-tighter text-slate-700 leading-none">{item.time}</div>
+                <div className="text-2xl 2xl:text-3xl font-black tracking-tighter text-slate-700 leading-none">{item.time}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 응시 현황 (비율 1) */}
-        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+        {/* 응시 현황 (비율 2) */}
+        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
             <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">응시 현황</div>
             <div className="flex flex-col justify-evenly flex-1 p-2">
                 <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
-                    <span className="text-3xl 2xl:text-4xl font-black text-slate-500 leading-none">재적</span>
-                    <span className="text-3xl 2xl:text-4xl font-black text-slate-800 leading-none">{stats.total}</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-slate-500 leading-none">재적</span>
+                    <span className="text-2xl 2xl:text-3xl font-black text-slate-800 leading-none">{stats.total}</span>
                 </div>
                 <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
-                    <span className="text-3xl 2xl:text-4xl font-black text-blue-500 leading-none">응시</span>
-                    <span className="text-3xl 2xl:text-4xl font-black text-blue-600 leading-none">{stats.present}</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-blue-500 leading-none">응시</span>
+                    <span className="text-2xl 2xl:text-3xl font-black text-blue-600 leading-none">{stats.present}</span>
                 </div>
                 <div className="flex flex-col xl:flex-row justify-center xl:justify-between items-center px-4 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1">
-                    <span className="text-3xl 2xl:text-4xl font-black text-red-500 leading-none">결시</span>
-                    <span className="text-3xl 2xl:text-4xl font-black text-red-600 leading-none">{stats.absent}</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-red-500 leading-none">결시</span>
+                    <span className="text-2xl 2xl:text-3xl font-black text-red-600 leading-none">{stats.absent}</span>
                 </div>
             </div>
         </div>
         
-        {/* 전달사항 (비율 2) */}
-        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
+        {/* 전달사항 (비율 5) */}
+        <div className="col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
           <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2">
             {(globalAnnouncement || globalAnnouncementImage) ? (
