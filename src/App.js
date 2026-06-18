@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 
 // ==========================================
-// Firebase 설정 (환경 변수 또는 로컬 하드코딩 대체)
+// Firebase 설정
 // ==========================================
-const defaultFirebaseConfig = {
-  apiKey: "AIzaSyDuI0jv-wSUORdPL8rDGvkiFiB9KW0wGuw",
+const firebaseConfig = {
+  apiKey: "AIzaSyCuydLyh83vbG1nR6-HV5MuNgJNhdJSuUI",
   authDomain: "exam-system-9bcd7.firebaseapp.com",
   projectId: "exam-system-9bcd7",
   storageBucket: "exam-system-9bcd7.firebasestorage.app",
@@ -16,92 +17,13 @@ const defaultFirebaseConfig = {
   measurementId: "G-36DXM2SY8N"
 };
 
-// Canvas 플랫폼 내에서 주입되는 __firebase_config가 있으면 이를 파싱하여 사용합니다.
-const firebaseConfig = typeof __firebase_config !== 'undefined'
-  ? JSON.parse(__firebase_config)
-  : defaultFirebaseConfig;
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// __app_id에 포함된 슬래시 이후의 파일 경로(예: /App.js-947)를 잘라내어 
-// 인증 토큰 클레임 및 보안 규칙과 완벽히 호환되는 순수 아티팩트 ID만 appId로 취급합니다.
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : "school-exam-dashboard";
-const appId = rawAppId.split('/')[0];
+const appId = "school-exam-dashboard";
 
 const ADMIN_PASSWORD = '3328';
 const ANNOUNCEMENT_LOCK_PASSWORD = '3328';
-
-// ==========================================
-// 표준 6-세그먼트(문서) 및 5-세그먼트(컬렉션) Firestore 경로 생성기
-// ==========================================
-const getGlobalDocRef = () => {
-  return doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'global');
-};
-
-const getClassDocRef = (grade, cls) => {
-  return doc(db, 'artifacts', appId, 'public', 'data', 'examData', `class_${grade}_${cls}`);
-};
-
-const getClassesCollectionRef = () => {
-  return collection(db, 'artifacts', appId, 'public', 'data', 'examData');
-};
-
-// ==========================================
-// 고성능 경량 인라인 SVG 아이콘 컴포넌트
-// ==========================================
-const AlertCircle = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
-
-const Trash2 = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-  </svg>
-);
-
-const Cloud = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-  </svg>
-);
-
-const X = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const ImageIcon = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <polyline points="21 15 16 10 5 21" />
-  </svg>
-);
-
-const Lock = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
-const Unlock = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-  </svg>
-);
 
 // 교실 좌석 설정 (가로 5열, 세로 6행 = 30석)
 const COLS = 5;
@@ -176,7 +98,6 @@ const makeDefaultGradeData = () => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false); // 인증 완료 플래그
   const [isSyncing, setIsSyncing] = useState(false);
   const [view, setView] = useState('dashboard');
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -222,31 +143,17 @@ export default function App() {
     gradeDataRef.current = gradeData; 
   }, [gradeData]);
 
-  // Firebase 초기화 및 인증 수립 (인증을 가장 먼저 수행하도록 구현)
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-        setAuthReady(true); // 인증 성공 후 플래그를 설정합니다.
-      } catch (err) {
-        console.error("인증 실패:", err);
-      }
-    };
-    initAuth();
+    signInAnonymously(auth).catch(err => console.error("인증 실패:", err));
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
-  // 전역 설정 및 학반 데이터 실시간 동기화 (인증이 100% 준비된 이후에만 실행)
   useEffect(() => {
-    if (!user || !authReady || !db) return;
+    if (!user || !db) return;
     setIsSyncing(true);
 
-    const globalRef = getGlobalDocRef();
+    const globalRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'global');
     const unsubGlobal = onSnapshot(globalRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -265,31 +172,27 @@ export default function App() {
         }
       }
       setIsSyncing(false);
-    }, (error) => {
-      console.error("전역 설정 구독 오류:", error);
     });
 
-    const classRef = getClassDocRef(localConfig.grade, localConfig.class);
+    const classDocId = `class_${localConfig.grade}_${localConfig.class}`;
+    const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', classDocId);
     const unsubClass = onSnapshot(classRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().students) {
         setStudents(docSnap.data().students);
       } else {
         setStudents([]);
       }
-    }, (error) => {
-      console.error("학반 학생 구독 오류:", error);
     });
 
     return () => { unsubGlobal(); unsubClass(); };
-  }, [user, authReady, localConfig.grade, localConfig.class]);
+  }, [user, localConfig.grade, localConfig.class]);
 
-  // 전체 학반 정보 모니터링 (인증 완료 후에만 쿼리)
   useEffect(() => {
-    if (!user || !authReady || !db || !isAuthenticated) {
+    if (!user || !db || !isAuthenticated) {
       setAllClassesData({});
       return;
     }
-    const examCollection = getClassesCollectionRef();
+    const examCollection = collection(db, 'artifacts', appId, 'public', 'data', 'examData');
     const unsubAll = onSnapshot(examCollection, (snapshot) => {
       const data = {};
       snapshot.forEach(docSnap => {
@@ -301,11 +204,9 @@ export default function App() {
         }
       });
       setAllClassesData(data);
-    }, (error) => {
-      console.error("전체 학반 구독 오류:", error);
     });
     return () => unsubAll();
-  }, [user, authReady, isAuthenticated]);
+  }, [user, isAuthenticated]);
 
   // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
   useEffect(() => {
@@ -380,80 +281,44 @@ export default function App() {
   }, [gradeData, localConfig.grade, globalConfig.day]);
 
   const updateGlobalDoc = async (updates) => {
-    if (!user || !authReady) return;
-    const globalRef = getGlobalDocRef();
+    if (!user) return;
+    const globalRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'global');
     await setDoc(globalRef, updates, { merge: true });
   };
 
   const updateClassDoc = async (newStudents) => {
-    if (!user || !authReady) return;
-    const classRef = getClassDocRef(localConfig.grade, localConfig.class);
+    if (!user) return;
+    const classDocId = `class_${localConfig.grade}_${localConfig.class}`;
+    const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', classDocId);
     await setDoc(classRef, { students: newStudents }, { merge: true });
   };
 
-  // CSV 데이터 정제 업로드 함수 개선
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploadStatus('업로드 및 정제 중...');
+    setUploadStatus('업로드 중...');
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const text = event.target.result;
-        const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+        const rows = text.split(/\r?\n/);
         const directory = {};
-
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i].split(',');
           if (cols.length < 4) continue;
-
-          // UTF-8 BOM(\ufeff) 제거 및 양 끝 공백 청소
-          const rawGrade = cols[0].replace(/^\ufeff/, '').trim();
-          const rawClass = cols[1].trim();
-          const rawId = cols[2].trim();
-          const name = cols[3].trim();
-
-          // 정규식으로 숫자 이외의 문자(예: "학년", "반" 등)를 제거한 뒤 순수 정수 파싱
-          const gradeNum = parseInt(rawGrade.replace(/[^0-9]/g, ''), 10);
-          const classNum = parseInt(rawClass.replace(/[^0-9]/g, ''), 10);
-          const idNum = parseInt(rawId.replace(/[^0-9]/g, ''), 10);
-
-          if (isNaN(gradeNum) || isNaN(classNum) || isNaN(idNum) || !name) {
-            console.warn(`스킵된 행 ${i + 1} (데이터 형식 오류):`, rows[i]);
-            continue;
-          }
-
-          // 학반 키값을 "1-1", "1-2" 등 대시보드 로컬 설정 값 포맷에 강제 매칭
-          const gradeStr = gradeNum.toString();
-          const classStr = classNum.toString();
-          const key = `${gradeStr}-${classStr}`;
-
+          const key = `${cols[0].trim()}-${cols[1].trim()}`;
           if (!directory[key]) directory[key] = [];
-          directory[key].push({ id: idNum, name, isAbsent: false, absenceReason: '질병' });
-        }
-
-        console.log('정제 완료된 학반 키 목록:', Object.keys(directory));
-
-        await updateGlobalDoc({ studentDirectory: directory });
-
-        const writeResults = [];
-        for (const [key, list] of Object.entries(directory)) {
-          const [grade, cls] = key.split('-');
-          const classRef = getClassDocRef(grade, cls);
-          console.log(`쓰기 시도: ${classRef.id}, 학생 수: ${list.length}`);
           
-          // merge: false를 주어 기존 불완전 데이터 덮어쓰기 처리
-          await setDoc(classRef, { students: list }, { merge: false });
-          writeResults.push(classRef.id);
+          directory[key].push({ 
+            id: parseInt(cols[2]), 
+            name: cols[3].trim(), 
+            isAbsent: false, 
+            absenceReason: '질병'
+          });
         }
-
-        console.log('쓰기 완료된 학반 문서 목록:', writeResults);
-        setStudentDirectory(directory);
-        setUploadStatus(`데이터 정제 및 반영 완료 (${writeResults.length}개 학반 성공)`);
-      } catch (err) {
-        console.error('CSV 업로드 중 오류 발생:', err);
-        setUploadStatus(`오류 발생: ${err.message}`);
-      }
+        await updateGlobalDoc({ studentDirectory: directory });
+        setUploadStatus('데이터 저장 완료');
+      } catch (err) { setUploadStatus('오류 발생'); }
     };
     reader.readAsText(file, 'euc-kr');
   };
@@ -1078,21 +943,21 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className="text-slate-400">학년</span>
               <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n.toString()}>{n}학년</option>)}
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n}학년</option>)}
               </select>
             </div>
             <div className="w-px bg-slate-200 h-4"></div>
             <div className="flex items-center gap-2">
               <span className="text-slate-400">반</span>
               <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
-                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n.toString()}>{n}반</option>)}
+                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}반</option>)}
               </select>
             </div>
             <div className="w-px bg-slate-200 h-4"></div>
             <div className="flex items-center gap-2">
               <span className="text-slate-400">날짜</span>
               <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-600 border-b-2 border-blue-600 outline-none font-black cursor-pointer">
-                {[1, 2, 3].map(n => <option key={n} value={n.toString()}>{formatDateBadge(globalConfig.dates?.[n], n)}</option>)}
+                {[1, 2, 3].map(n => <option key={n} value={n}>{formatDateBadge(globalConfig.dates?.[n], n)}</option>)}
               </select>
             </div>
           </div>
