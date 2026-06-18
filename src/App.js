@@ -16,28 +16,19 @@ const defaultFirebaseConfig = {
   measurementId: "G-36DXM2SY8N"
 };
 
-// 1. 기본 백업 프로젝트 초기화 (사용자 전용 고유 서버)
-const backupApp = initializeApp(defaultFirebaseConfig, "backupProject");
-const backupAuth = getAuth(backupApp);
-const backupDb = getFirestore(backupApp);
+// Canvas 플랫폼 내에서 주입되는 __firebase_config가 있으면 이를 파싱하여 사용합니다.
+const firebaseConfig = typeof __firebase_config !== 'undefined'
+  ? JSON.parse(__firebase_config)
+  : defaultFirebaseConfig;
 
-// 2. 플랫폼 연동 공용 프로젝트 초기화 시도
-let platformApp = null;
-let platformAuth = null;
-let platformDb = null;
-let platformConfigExists = false;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-  try {
-    const config = JSON.parse(__firebase_config);
-    platformApp = initializeApp(config); // Default app
-    platformAuth = getAuth(platformApp);
-    platformDb = getFirestore(platformApp);
-    platformConfigExists = true;
-  } catch (e) {
-    console.error("공용 플랫폼 Firebase 초기화 실패:", e);
-  }
-}
+// __app_id에 포함된 슬래시 이후의 파일 경로(예: /App.js-947)를 잘라내어 
+// 인증 토큰 클레임 및 보안 규칙과 완벽히 호환되는 순수 아티팩트 ID만 appId로 취급합니다.
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : "school-exam-dashboard";
+const appId = rawAppId.split('/')[0];
 
 const ADMIN_PASSWORD = '3328';
 const ANNOUNCEMENT_LOCK_PASSWORD = '3328';
@@ -45,16 +36,16 @@ const ANNOUNCEMENT_LOCK_PASSWORD = '3328';
 // ==========================================
 // 표준 6-세그먼트(문서) 및 5-세그먼트(컬렉션) Firestore 경로 생성기
 // ==========================================
-const getGlobalDocRef = (database, currentAppId) => {
-  return doc(database, 'artifacts', currentAppId, 'public', 'data', 'examData', 'global');
+const getGlobalDocRef = () => {
+  return doc(db, 'artifacts', appId, 'public', 'data', 'examData', 'global');
 };
 
-const getClassDocRef = (database, currentAppId, grade, cls) => {
-  return doc(database, 'artifacts', currentAppId, 'public', 'data', 'examData', `class_${grade}_${cls}`);
+const getClassDocRef = (grade, cls) => {
+  return doc(db, 'artifacts', appId, 'public', 'data', 'examData', `class_${grade}_${cls}`);
 };
 
-const getClassesCollectionRef = (database, currentAppId) => {
-  return collection(database, 'artifacts', currentAppId, 'public', 'data', 'examData');
+const getClassesCollectionRef = () => {
+  return collection(db, 'artifacts', appId, 'public', 'data', 'examData');
 };
 
 // ==========================================
@@ -184,9 +175,6 @@ const makeDefaultGradeData = () => {
 };
 
 export default function App() {
-  // 플랫폼 공용서버의 오류 여부에 따라 로컬 백업 서버로 자동 우회 활성화 플래그
-  const [isFallback, setIsFallback] = useState(!platformConfigExists);
-  
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false); // 인증 완료 플래그
   const [isSyncing, setIsSyncing] = useState(false);
@@ -230,50 +218,35 @@ export default function App() {
   const [announcementFontSize, setAnnouncementFontSize] = useState(22);
   const announcementTextRef = useRef(null);
 
-  // 동적 상태에 맞춰 알맞은 Firebase 모듈을 매핑합니다.
-  const currentDb = isFallback ? backupDb : (platformDb || backupDb);
-  const currentAuth = isFallback ? backupAuth : (platformAuth || backupAuth);
-  const currentAppId = isFallback 
-    ? "school-exam-dashboard" 
-    : (typeof __app_id !== 'undefined' ? __app_id.split('/')[0] : "school-exam-dashboard");
-
   useEffect(() => { 
     gradeDataRef.current = gradeData; 
   }, [gradeData]);
 
-  // Firebase 초기화 및 인증 수립 (서버 연동 상태에 반응하여 동적으로 복구)
+  // Firebase 초기화 및 인증 수립 (인증을 가장 먼저 수행하도록 구현)
   useEffect(() => {
-    setAuthReady(false);
     const initAuth = async () => {
       try {
-        if (!isFallback && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(currentAuth, __initial_auth_token);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-          await signInAnonymously(currentAuth);
+          await signInAnonymously(auth);
         }
-        setAuthReady(true);
+        setAuthReady(true); // 인증 성공 후 플래그를 설정합니다.
       } catch (err) {
         console.error("인증 실패:", err);
-        // 공용 서버 인증 실패 시 로컬 백업 서버로 조용히 전환
-        if (!isFallback) {
-          console.warn("공용 고사 서버 인증 실패로 로컬 백업 서버로 즉시 우회합니다.");
-          setIsFallback(true);
-        } else {
-          setAuthReady(true); // 백업 마저 실패한 경우 동작 유지를 위해 true 처리
-        }
       }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(currentAuth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
-  }, [isFallback]);
+  }, []);
 
-  // 전역 설정 및 학반 데이터 실시간 동기화 (오류 발생 시 백업 서버 전환 통합)
+  // 전역 설정 및 학반 데이터 실시간 동기화 (인증이 100% 준비된 이후에만 실행)
   useEffect(() => {
-    if (!user || !authReady || !currentDb) return;
+    if (!user || !authReady || !db) return;
     setIsSyncing(true);
 
-    const globalRef = getGlobalDocRef(currentDb, currentAppId);
+    const globalRef = getGlobalDocRef();
     const unsubGlobal = onSnapshot(globalRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -294,14 +267,9 @@ export default function App() {
       setIsSyncing(false);
     }, (error) => {
       console.error("전역 설정 구독 오류:", error);
-      // 권한 누락 발생 시 로컬 백업 서버로 안전전환 수행
-      if (error.code === 'permission-denied' && !isFallback) {
-        console.warn("권한 누락 감지: 로컬 백업 서버로 실시간 자동 우회합니다.");
-        setIsFallback(true);
-      }
     });
 
-    const classRef = getClassDocRef(currentDb, currentAppId, localConfig.grade, localConfig.class);
+    const classRef = getClassDocRef(localConfig.grade, localConfig.class);
     const unsubClass = onSnapshot(classRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().students) {
         setStudents(docSnap.data().students);
@@ -310,22 +278,18 @@ export default function App() {
       }
     }, (error) => {
       console.error("학반 학생 구독 오류:", error);
-      if (error.code === 'permission-denied' && !isFallback) {
-        console.warn("권한 누락 감지: 로컬 백업 서버로 실시간 자동 우회합니다.");
-        setIsFallback(true);
-      }
     });
 
     return () => { unsubGlobal(); unsubClass(); };
-  }, [user, authReady, localConfig.grade, localConfig.class, isFallback, currentDb, currentAppId]);
+  }, [user, authReady, localConfig.grade, localConfig.class]);
 
-  // 전체 학반 정보 모니터링
+  // 전체 학반 정보 모니터링 (인증 완료 후에만 쿼리)
   useEffect(() => {
-    if (!user || !authReady || !currentDb || !isAuthenticated) {
+    if (!user || !authReady || !db || !isAuthenticated) {
       setAllClassesData({});
       return;
     }
-    const examCollection = getClassesCollectionRef(currentDb, currentAppId);
+    const examCollection = getClassesCollectionRef();
     const unsubAll = onSnapshot(examCollection, (snapshot) => {
       const data = {};
       snapshot.forEach(docSnap => {
@@ -339,12 +303,9 @@ export default function App() {
       setAllClassesData(data);
     }, (error) => {
       console.error("전체 학반 구독 오류:", error);
-      if (error.code === 'permission-denied' && !isFallback) {
-        setIsFallback(true);
-      }
     });
     return () => unsubAll();
-  }, [user, authReady, isAuthenticated, isFallback, currentDb, currentAppId]);
+  }, [user, authReady, isAuthenticated]);
 
   // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
   useEffect(() => {
@@ -420,13 +381,13 @@ export default function App() {
 
   const updateGlobalDoc = async (updates) => {
     if (!user || !authReady) return;
-    const globalRef = getGlobalDocRef(currentDb, currentAppId);
+    const globalRef = getGlobalDocRef();
     await setDoc(globalRef, updates, { merge: true });
   };
 
   const updateClassDoc = async (newStudents) => {
     if (!user || !authReady) return;
-    const classRef = getClassDocRef(currentDb, currentAppId, localConfig.grade, localConfig.class);
+    const classRef = getClassDocRef(localConfig.grade, localConfig.class);
     await setDoc(classRef, { students: newStudents }, { merge: true });
   };
 
@@ -478,7 +439,7 @@ export default function App() {
         const writeResults = [];
         for (const [key, list] of Object.entries(directory)) {
           const [grade, cls] = key.split('-');
-          const classRef = getClassDocRef(currentDb, currentAppId, grade, cls);
+          const classRef = getClassDocRef(grade, cls);
           console.log(`쓰기 시도: ${classRef.id}, 학생 수: ${list.length}`);
           
           // merge: false를 주어 기존 불완전 데이터 덮어쓰기 처리
@@ -795,4 +756,422 @@ export default function App() {
                         onMouseDown={(e) => e.stopPropagation()}
                         className="bg-white/95 border border-red-200 shadow-sm rounded font-black text-red-600 outline-none leading-none shrink-0 text-xs sm:text-sm md:text-base lg:text-lg 2xl:text-xl px-1 sm:px-1.5 py-0.5 max-w-[3.5rem] sm:max-w-none"
                       >
-                        <option value
+                        <option value="질병">질병</option>
+                        <option value="인정">인정</option>
+                        <option value="미인정">미인정</option>
+                        <option value="기타">기타</option>
+                        <option value="전출">전출</option>
+                        <option value="위탁">위탁</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className="text-slate-300 font-bold pointer-events-none text-[10px] sm:text-sm">빈 자리</span>
+              )}
+            </div>
+          );
+        })
+      ))}
+    </div>
+  );
+
+  const renderDashboard = () => (
+    <div className="flex flex-col gap-4 flex-1 h-full min-h-0 w-full">
+      {/* 4:1:5 비율을 위해 grid-cols-10 사용 (col-span-4, col-span-1, col-span-5) */}
+      <div className="grid grid-cols-10 gap-4 h-[42%] min-h-[300px] shrink-0">
+        
+        {/* 금일 시험 시간표 (비율 4) */}
+        <div className="col-span-4 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+          <div className="bg-slate-50 text-slate-500 font-bold text-sm border-b border-slate-200 p-3 text-center uppercase tracking-widest shrink-0">금일 시험 시간표</div>
+          <div className="flex flex-col justify-evenly flex-1 p-2">
+            {currentGradeSchedule.map((item) => (
+              <div key={item.id} className="flex flex-row items-center justify-between px-4 py-3 flex-1 border-b border-slate-100 last:border-0">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 text-lg shrink-0">{item.period}</span>
+                  <div className="flex items-baseline gap-1.5 truncate">
+                    <span className="text-2xl 2xl:text-3xl font-black text-slate-800 leading-none">{item.subject}</span>
+                    {item.code && <span className="text-xl 2xl:text-2xl font-black text-slate-500 leading-none shrink-0">({item.code})</span>}
+                  </div>
+                </div>
+                <div className="text-2xl 2xl:text-3xl font-black tracking-tighter text-slate-700 leading-none shrink-0">{item.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 응시 현황 (비율 1) */}
+        <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+            <div className="bg-slate-50 text-slate-500 font-bold text-xs 2xl:text-sm border-b border-slate-200 p-2 text-center uppercase tracking-widest shrink-0">응시 현황</div>
+            <div className="flex flex-col justify-evenly flex-1 p-1">
+                <div className="flex flex-col items-center justify-center px-1 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1 text-center">
+                    <span className="text-sm 2xl:text-base font-black text-slate-500 leading-none">재적</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-slate-800 leading-none">{stats.total}</span>
+                </div>
+                <div className="flex flex-col items-center justify-center px-1 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1 text-center">
+                    <span className="text-sm 2xl:text-base font-black text-blue-500 leading-none">응시</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-blue-600 leading-none">{stats.present}</span>
+                </div>
+                <div className="flex flex-col items-center justify-center px-1 py-2 flex-1 border-b border-slate-100 last:border-0 gap-1 text-center">
+                    <span className="text-sm 2xl:text-base font-black text-red-500 leading-none">결시</span>
+                    <span className="text-xl 2xl:text-2xl font-black text-red-600 leading-none">{stats.absent}</span>
+                </div>
+            </div>
+        </div>
+        
+        {/* 전달사항 (비율 5) */}
+        <div className="col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
+          <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
+          <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2">
+            {(globalAnnouncement || globalAnnouncementImage) ? (
+              <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm h-full flex flex-col min-h-0">
+                {globalAnnouncement && (
+                  <p 
+                    ref={announcementTextRef} 
+                    style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} 
+                    className="font-black text-slate-800 break-keep whitespace-pre-wrap flex-1 overflow-hidden min-h-0"
+                  >
+                    {globalAnnouncement}
+                  </p>
+                )}
+                {globalAnnouncementImage && (
+                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-52 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1 shrink-0" />
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-slate-400 text-sm font-bold m-auto">등록된 전달사항이 없습니다.</p>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* 자리 배치도 영역 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1 min-h-0 relative">
+        <div className="flex justify-between items-center mb-3 shrink-0 px-2 relative min-h-[40px]">
+          <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+            자리 배치도
+          </h3>
+          <div className="absolute left-1/2 -translate-x-1/2 bg-emerald-800 text-white text-center px-16 sm:px-24 py-1.5 sm:py-2 font-black tracking-[1em] rounded-lg shadow-md text-base sm:text-lg border-[3px] border-emerald-900 flex items-center justify-center z-10">
+            칠 판
+          </div>
+        </div>
+        
+        <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 shadow-inner overflow-hidden relative">
+          <SeatGrid />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAdmin = () => (
+    <div className="bg-white flex-1 rounded-2xl border border-slate-200 p-8 overflow-y-auto flex flex-col gap-10 text-slate-800 shadow-sm">
+      <section>
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight flex items-center gap-2">1. 학생 명단 초기 데이터 업로드 (CSV)</h2>
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 border-dashed flex flex-col gap-2">
+          <input type="file" accept=".csv" onChange={handleFileUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+          <p className="text-xs text-slate-400 font-bold mt-1">※ 업로드 시 좌석은 우선순위에 따라 자동 배정됩니다. 개별 좌석 이동은 상황판 대시보드에서 진행하세요.</p>
+          {uploadStatus && <p className="mt-2 text-blue-600 font-black text-sm">{uploadStatus}</p>}
+        </div>
+      </section>
+      
+      <section>
+        <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-4">
+          <h2 className="font-black text-xl tracking-tight">2. 시험 시간표 설정</h2>
+          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-black ring-1 ring-blue-100">
+            편집 중 · {localConfig.grade}학년 {formatDateBadge(globalConfig.dates?.[globalConfig.day], globalConfig.day)}
+          </span>
+        </div>
+
+        <div className="bg-slate-50 rounded-2xl p-5 mb-5 border border-slate-200">
+          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">시험 일정 지정</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {['1','2','3'].map(d => (
+              <div key={d} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                <span className="font-black text-slate-500 text-sm whitespace-nowrap">{d}일차</span>
+                <input type="date" value={globalConfig.dates?.[d] || ''} onChange={(e) => handleDateChange(d, e.target.value)} className="flex-1 bg-transparent text-slate-800 font-bold outline-none text-sm" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3 mb-5 flex-wrap">
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['1','2','3'].map(g => (
+              <button key={g} onClick={() => setLocalConfig({ ...localConfig, grade: g })} className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${localConfig.grade === g ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{g}학년</button>
+            ))}
+          </div>
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['1','2','3'].map(d => (
+              <button key={d} onClick={() => { const newConfig = { ...globalConfig, day: d }; setGlobalConfig(newConfig); updateGlobalDoc({ globalConfig: newConfig }); }} className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${globalConfig.day === d ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{formatDateBadge(globalConfig.dates?.[d], d)}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {currentGradeSchedule.map(item => {
+            const parts = (item.time || '').split(' - ');
+            const startTime = (parts[0] || '').trim();
+            const endTime = (parts[1] || '').trim();
+            const isLegacyValue = item.subject && !Object.prototype.hasOwnProperty.call(SUBJECT_CODE_MAP, item.subject);
+            return (
+              <div key={item.id} className="grid grid-cols-12 gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                <div className="col-span-1 flex justify-center">
+                  <span className="w-10 h-10 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg font-black text-lg">{item.period}</span>
+                </div>
+                <select value={item.subject || ''} onChange={(e) => { handleScheduleChange(item.id, 'subject', e.target.value); saveSchedule(); }} className="col-span-5 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-slate-800 font-bold outline-none focus:bg-white focus:border-blue-400">
+                  <option value="">— 과목 선택 —</option>
+                  {isLegacyValue && <option value={item.subject}>{item.subject} (구 데이터)</option>}
+                  {Object.keys(SUBJECT_CODE_MAP).map(name => {
+                    const isUsedElsewhere = usedInOtherDays.has(name) && name !== item.subject;
+                    return <option key={name} value={name} disabled={isUsedElsewhere}>{name}{SUBJECT_CODE_MAP[name] ? ` (${SUBJECT_CODE_MAP[name]})` : ''}</option>;
+                  })}
+                </select>
+                <input type="text" value={item.code} onChange={(e) => handleScheduleChange(item.id, 'code', e.target.value)} onBlur={saveSchedule} placeholder="—" className="col-span-2 bg-slate-50 border-2 border-transparent p-3 rounded-lg text-center font-bold outline-none focus:bg-white focus:border-blue-400" />
+                <input type="time" value={startTime} onChange={(e) => handleScheduleChange(item.id, 'time', `${e.target.value} - ${endTime}`)} onBlur={saveSchedule} className="col-span-2 bg-slate-50 p-3 rounded-lg text-center font-bold focus:bg-white focus:border-blue-400" />
+                <input type="time" value={endTime} onChange={(e) => handleScheduleChange(item.id, 'time', `${startTime} - ${e.target.value}`)} onBlur={saveSchedule} className="col-span-2 bg-slate-50 p-3 rounded-lg text-center font-bold focus:bg-white focus:border-blue-400" />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-4">
+          <h2 className="font-black text-xl tracking-tight">3. 학생 명단 관리 ({localConfig.grade}학년 {localConfig.class}반)</h2>
+          <div className="flex gap-2">
+            <button onClick={handleResetClassStudents} className="bg-white text-slate-500 px-3 py-1.5 rounded-lg font-bold text-xs border border-slate-200 hover:bg-slate-50">명단 초기화</button>
+            <button onClick={handleAddStudent} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-black text-xs shadow-md">+ 빈 좌석 학생 추가</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+          {studentsWithSeats.map(s => (
+            <div key={s.id} className="p-3 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm min-h-[50px]">
+              {adminEditingId === s.id ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2">
+                    <input 
+                      type="number" 
+                      value={adminEditForm.id} 
+                      onChange={e => setAdminEditForm({...adminEditForm, id: e.target.value})} 
+                      className="w-12 border border-slate-300 rounded px-1 text-sm outline-none" 
+                      placeholder="번호" 
+                    />
+                    <input 
+                      type="text" 
+                      value={adminEditForm.name} 
+                      onChange={e => setAdminEditForm({...adminEditForm, name: e.target.value})} 
+                      className="flex-1 border border-slate-300 rounded px-1 text-sm outline-none" 
+                      placeholder="이름" 
+                    />
+                  </div>
+                  <div className="flex justify-end gap-1">
+                    <button onClick={handleAdminSaveStudent} className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded font-bold transition-colors">저장</button>
+                    <button onClick={() => setAdminEditingId(null)} className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded font-bold transition-colors">취소</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <span 
+                    className="text-sm font-bold text-slate-700 cursor-pointer hover:text-blue-600 transition-colors" 
+                    onClick={() => handleAdminEditClick(s)}
+                  >
+                    {s.name} <span className="text-[10px] text-slate-400 font-normal ml-1 bg-slate-100 px-1.5 py-0.5 rounded">{s.id}번 (좌석 {s.seatIndex + 1})</span>
+                  </span>
+                  <button onClick={() => handleDeleteStudent(s.id)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded-md shrink-0"><Trash2 size={14} /></button>
+                </>
+              )}
+            </div>
+          ))}
+          {studentsWithSeats.length === 0 && (
+            <div className="col-span-4 text-center text-slate-400 text-sm py-8 font-bold">등록된 학생이 없습니다.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-6 pb-12">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <h2 className="font-black text-xl tracking-tight">4. 실시간 전달사항 송출</h2>
+          {isAnnouncementLocked ? (
+            <button onClick={() => { setLockPasswordInput(''); setLockError(''); setShowLockModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200 transition-colors ring-1 ring-slate-200"><Lock size={14} /> 잠금 (해제하려면 클릭)</button>
+          ) : (
+            <button onClick={() => setIsAnnouncementLocked(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"><Unlock size={14} /> 잠금 해제됨 · 다시 잠그기</button>
+          )}
+        </div>
+
+        {isAnnouncementLocked && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-700 flex items-center gap-2"><Lock size={14} /> 전달사항 송출·삭제·이미지 첨부는 잠금 해제 후 가능합니다. 우측 상단 자물쇠를 클릭하여 해제하세요.</div>
+        )}
+
+        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner mt-2">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-slate-800 font-black text-sm uppercase">전달사항 작성</h3>
+            <button onClick={handleDeleteGlobalAnnouncement} disabled={isAnnouncementLocked || (!globalAnnouncement && !globalAnnouncementImage)} className="text-red-500 hover:text-red-700 font-black text-xs disabled:opacity-50 flex items-center gap-1">
+              <Trash2 size={14} /> 현재 전달사항 삭제
+            </button>
+          </div>
+          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} disabled={isAnnouncementLocked} className={`w-full border border-slate-200 p-4 rounded-xl h-32 mb-4 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm transition-colors ${isAnnouncementLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`} placeholder={isAnnouncementLocked ? '잠금 해제 후 입력 가능합니다.' : '모든 학년에 공통으로 표시될 전달사항을 입력하세요.'} />
+          
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4 flex items-center gap-4">
+            <ImageIcon size={20} className="text-slate-400" />
+            <input type="file" accept="image/*" onChange={handleAnnouncementImageUpload} disabled={isAnnouncementLocked} className={`block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${isAnnouncementLocked ? 'text-slate-300 file:bg-slate-100 file:text-slate-400 cursor-not-allowed' : 'text-slate-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'}`} />
+            {adminGlobalAnnImage && (
+              <button onClick={() => { setAdminGlobalAnnImage(''); setImageUploadStatus(''); }} disabled={isAnnouncementLocked} className="text-red-500 hover:text-red-700 font-black text-xs whitespace-nowrap">
+                이미지 제거
+              </button>
+            )}
+          </div>
+          {imageUploadStatus && <p className="mb-4 text-blue-600 font-black text-sm">{imageUploadStatus}</p>}
+
+          <button onClick={() => setSendConfirm({ type: 'global' })} disabled={isAnnouncementLocked || (!adminGlobalAnnInput.trim() && !adminGlobalAnnImage)} className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isAnnouncementLocked || (!adminGlobalAnnInput.trim() && !adminGlobalAnnImage)) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-[0.98]'}`}>{isAnnouncementLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> 전체 송출 (잠김)</span> : '전체 송출'}</button>
+        </div>
+      </section>
+
+      <section className="pb-12">
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight">5. 전체 학반 결시생 현황 요약</h2>
+        <div className="grid grid-cols-3 gap-5">
+          {['1','2','3'].map(grade => {
+            const gradeTotal = [1,2,3,4,5,6].reduce((sum, cls) => {
+              const list = allClassesData[`${grade}-${cls}`] || [];
+              return sum + list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason)).length;
+            }, 0);
+            return (
+              <div key={grade} className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                <div className="flex justify-between items-baseline mb-4 pb-3 border-b border-slate-200">
+                  <h3 className="font-black text-lg text-slate-800">{grade}학년</h3>
+                  <span className={`text-sm font-black px-3 py-1 rounded-full ${gradeTotal > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>{gradeTotal}명 결시</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {[1,2,3,4,5,6].map(cls => {
+                    const key = `${grade}-${cls}`;
+                    const list = allClassesData[key] || [];
+                    const absent = list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason));
+                    return (
+                      <div key={cls} className={`p-3 rounded-xl border transition-colors ${absent.length > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="font-black text-slate-700 text-sm">{cls}반</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${absent.length > 0 ? 'bg-red-200 text-red-700' : 'bg-slate-100 text-slate-400'}`}>{absent.length}명</span>
+                        </div>
+                        {absent.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {absent.map(s => <span key={s.id} className="text-xs bg-white px-2 py-1 rounded-md text-slate-700 ring-1 ring-red-200 font-bold">{s.name} <span className="text-red-500 font-black">· {s.absenceReason}</span></span>)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 font-sans flex flex-col gap-4 h-screen w-screen overflow-hidden">
+      <header className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center shrink-0">
+        <div className="flex items-center gap-8">
+          <h1 className="text-xl font-black text-slate-800 tracking-tighter leading-none px-2">고사 상황판</h1>
+          <div className="flex gap-4 items-center bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 text-xs font-black shadow-inner">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">학년</span>
+              <select value={localConfig.grade} onChange={(e) => setLocalConfig({ ...localConfig, grade: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n.toString()}>{n}학년</option>)}
+              </select>
+            </div>
+            <div className="w-px bg-slate-200 h-4"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">반</span>
+              <select value={localConfig.class} onChange={(e) => setLocalConfig({ ...localConfig, class: e.target.value })} className="bg-transparent text-slate-800 border-b-2 border-blue-500 outline-none cursor-pointer">
+                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n.toString()}>{n}반</option>)}
+              </select>
+            </div>
+            <div className="w-px bg-slate-200 h-4"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">날짜</span>
+              <select value={globalConfig.day} name="day" onChange={handleGlobalConfigChange} className="bg-transparent text-blue-600 border-b-2 border-blue-600 outline-none font-black cursor-pointer">
+                {[1, 2, 3].map(n => <option key={n} value={n.toString()}>{formatDateBadge(globalConfig.dates?.[n], n)}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setView('dashboard')} className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-800 text-white shadow-md shadow-slate-200' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>상황판 (자리배치도)</button>
+          <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>관리 설정</button>
+        </div>
+      </header>
+      
+      {view === 'dashboard' ? renderDashboard() : renderAdmin()}
+      
+      {/* 관리자 인증 모달 */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[2.5rem] p-12 w-full max-w-sm shadow-2xl border border-white">
+            <h3 className="text-3xl font-black text-slate-800 tracking-tight text-center mb-10">관리자 인증</h3>
+            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-6">
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-800 font-black shadow-inner" placeholder="••••" autoFocus />
+              {authError && <p className="text-red-500 text-center font-black animate-bounce text-sm">{authError}</p>}
+              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">확인</button>
+              <button type="button" onClick={() => setShowAuthModal(false)} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">돌아가기</button>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* 전달사항 잠금 모달 */}
+      {showLockModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[2.5rem] p-12 w-full max-w-sm shadow-2xl border border-white">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center ring-1 ring-amber-100"><Lock size={28} className="text-amber-600" /></div>
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight text-center mb-2">공지 잠금 해제</h3>
+            <p className="text-xs text-slate-400 text-center mb-8 font-bold">송출·삭제·이미지 첨부를 위해 인증이 필요합니다</p>
+            <form onSubmit={handleUnlockSubmit} className="flex flex-col gap-6">
+              <input type="password" value={lockPasswordInput} onChange={(e) => setLockPasswordInput(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-amber-500 focus:bg-white transition-all text-slate-800 font-black shadow-inner" placeholder="••••" autoFocus />
+              {lockError && <p className="text-red-500 text-center font-black animate-bounce text-sm">{lockError}</p>}
+              <button type="submit" className="w-full bg-amber-500 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">잠금 해제</button>
+              <button type="button" onClick={() => { setShowLockModal(false); setLockPasswordInput(''); setLockError(''); }} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">취소</button>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* 송출 확인 모달 */}
+      {sendConfirm && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl">
+            <div className="flex justify-center mb-5">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center ring-1 bg-blue-50 ring-blue-100"><AlertCircle size={26} className="text-blue-600" /></div>
+            </div>
+            <h3 className="text-xl font-black text-slate-800 tracking-tight text-center mb-3">
+              전체 학생에게 전달사항을 송출하시겠습니까?
+            </h3>
+            <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-200 max-h-40 overflow-auto">
+              <p className="text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep">{adminGlobalAnnInput}</p>
+              {adminGlobalAnnImage && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 font-black"><ImageIcon size={12} /> 이미지 1장 포함</div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setSendConfirm(null)} className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black hover:bg-slate-200 transition-colors">취소</button>
+              <button onClick={executeSend} className="flex-1 text-white py-4 rounded-2xl font-black shadow-lg active:scale-[0.98] transition-all bg-blue-600">송출</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 이미지 확대 모달 */}
+      {imageModalUrl && (
+        <div onClick={() => setImageModalUrl(null)} className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-50 p-8 cursor-zoom-out">
+          <img src={imageModalUrl} alt="확대" className="max-w-full max-h-full rounded-2xl shadow-2xl" />
+          <button onClick={(e) => { e.stopPropagation(); setImageModalUrl(null); }} className="absolute top-8 right-8 bg-white/10 hover:bg-white/20 text-white p-3 rounded-full"><X size={28} /></button>
+        </div>
+      )}
+      
+      {isSyncing && <div className="fixed bottom-10 right-10 bg-white/90 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-200 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-600 animate-pulse ring-4 ring-blue-50"><Cloud size={14}/> 실시간 동기화 중</div>}
+    </div>
+  );
+}
