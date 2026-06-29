@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal, Sun, Moon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
@@ -138,6 +138,57 @@ export default function App() {
   // 전달사항 폰트 크기 자동 조절 상태 (기본 22px)
   const [announcementFontSize, setAnnouncementFontSize] = useState(22);
   const announcementTextRef = useRef(null);
+
+  // ==========================================
+  // 화면꺼짐 방지 (Wake Lock) - 자동 작동
+  // ==========================================
+  const [wakeLockSupported, setWakeLockSupported] = useState(true);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const wakeLockRef = useRef(null);
+
+  const requestWakeLock = async () => {
+    if (!('wakeLock' in navigator)) {
+      setWakeLockSupported(false);
+      return;
+    }
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      wakeLockRef.current = lock;
+      setWakeLockActive(true);
+      lock.addEventListener('release', () => {
+        setWakeLockActive(false);
+      });
+    } catch (err) {
+      // 권한/정책상 실패해도 앱 동작에는 영향 없음
+      setWakeLockActive(false);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try { await wakeLockRef.current.release(); } catch (err) {}
+      wakeLockRef.current = null;
+    }
+    setWakeLockActive(false);
+  };
+
+  useEffect(() => {
+    // 페이지 로드 시 자동 시도
+    requestWakeLock();
+
+    // 탭이 백그라운드로 갔다가 돌아오면 Wake Lock이 풀리므로 재요청
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, []);
 
   useEffect(() => { 
     gradeDataRef.current = gradeData; 
@@ -962,7 +1013,21 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* 화면꺼짐 방지 상태 표시 (자동 작동, 정보 표시용) */}
+          {wakeLockSupported && (
+            <div
+              title={wakeLockActive ? '화면꺼짐 방지 작동 중' : '화면꺼짐 방지 대기 중'}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black border shrink-0 ${
+                wakeLockActive
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-slate-50 text-slate-400 border-slate-200'
+              }`}
+            >
+              {wakeLockActive ? <Sun size={13} /> : <Moon size={13} />}
+              <span className="hidden xl:inline">{wakeLockActive ? '화면 유지 중' : '화면 유지 대기'}</span>
+            </div>
+          )}
           <button onClick={() => setView('dashboard')} className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-300 ${view === 'dashboard' ? 'bg-slate-800 text-white shadow-md shadow-slate-200' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>상황판 (자리배치도)</button>
           <button onClick={() => isAuthenticated ? setView('admin') : setShowAuthModal(true)} className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-300 ${view === 'admin' ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}>관리 설정</button>
         </div>
