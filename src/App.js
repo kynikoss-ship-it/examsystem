@@ -799,7 +799,7 @@ export default function App() {
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
           <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2 min-h-0">
             {globalAnnouncement ? (
-              <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm flex-[3] flex flex-col min-h-0">
+              <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm flex-[4] flex flex-col min-h-0">
                 <p 
                   ref={announcementTextRef} 
                   style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} 
@@ -809,12 +809,12 @@ export default function App() {
                 </p>
               </div>
             ) : (
-              <p className="flex-[3] flex items-center justify-center text-center text-slate-400 text-sm font-bold min-h-0">등록된 전달사항이 없습니다.</p>
+              <p className="flex-[4] flex items-center justify-center text-center text-slate-400 text-sm font-bold min-h-0">등록된 전달사항이 없습니다.</p>
             )}
             {currentGradeData.announcement && (
-              <div className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm flex-[2] overflow-auto min-h-0">
+              <div className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm flex-[1] overflow-auto min-h-0">
                 <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-1">{localConfig.grade}학년 전달사항</p>
-                <p className="text-sm font-bold text-slate-800 whitespace-pre-wrap break-keep">{currentGradeData.announcement}</p>
+                <p style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} className="font-black text-slate-800 whitespace-pre-wrap break-keep">{currentGradeData.announcement}</p>
               </div>
             )}
           </div>
