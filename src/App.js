@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, AlertCircle, Trash2, Cloud, X, Image as ImageIcon, Lock, Unlock, GripHorizontal, Sun, Moon } from 'lucide-react';
+import { Users, AlertCircle, Trash2, Cloud, Lock, Unlock, GripHorizontal, Sun, Moon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
@@ -23,7 +23,8 @@ const db = getFirestore(app);
 const appId = "school-exam-dashboard";
 
 const ADMIN_PASSWORD = '3328';
-const ANNOUNCEMENT_LOCK_PASSWORD = '3328';
+const GLOBAL_ANNOUNCEMENT_LOCK_PASSWORD = '0316';
+const GRADE_ANNOUNCEMENT_LOCK_PASSWORD = '3328';
 
 // 교실 좌석 설정 (가로 5열, 세로 6행 = 30석)
 const COLS = 5;
@@ -61,28 +62,6 @@ const formatDateBadge = (isoDate, dayNum) => {
   return `${d.getMonth() + 1}/${d.getDate()} (${DAYS_KR[d.getDay()]})`;
 };
 
-const compressImage = (file, maxWidth = 1024, quality = 0.75) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const scale = Math.min(1, maxWidth / img.width);
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-};
-
 const makeDefaultGradeData = () => {
   const buildSchedules = () => ({
     '1': DEFAULT_SCHEDULE_DAY.map(s => ({ ...s })),
@@ -90,9 +69,9 @@ const makeDefaultGradeData = () => {
     '3': DEFAULT_SCHEDULE_DAY.map(s => ({ ...s })),
   });
   return {
-    '1': { schedules: buildSchedules(), announcement: '', announcementImage: '' },
-    '2': { schedules: buildSchedules(), announcement: '', announcementImage: '' },
-    '3': { schedules: buildSchedules(), announcement: '', announcementImage: '' },
+    '1': { schedules: buildSchedules(), announcement: '' },
+    '2': { schedules: buildSchedules(), announcement: '' },
+    '3': { schedules: buildSchedules(), announcement: '' },
   };
 };
 
@@ -113,28 +92,29 @@ export default function App() {
   const [localConfig, setLocalConfig] = useState({ grade: '1', class: '1' });
   const [globalConfig, setGlobalConfig] = useState({ day: '1', dates: { '1': '', '2': '', '3': '' } });
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
-  const [globalAnnouncementImage, setGlobalAnnouncementImage] = useState('');
   const [studentDirectory, setStudentDirectory] = useState({});
   const [uploadStatus, setUploadStatus] = useState('');
 
   const [gradeData, setGradeData] = useState(makeDefaultGradeData);
   const [adminGlobalAnnInput, setAdminGlobalAnnInput] = useState('');
-  const [adminGlobalAnnImage, setAdminGlobalAnnImage] = useState('');
-  const [imageUploadStatus, setImageUploadStatus] = useState('');
-  const [imageModalUrl, setImageModalUrl] = useState(null);
+  const [globalSendStatus, setGlobalSendStatus] = useState('');
   const [allClassesData, setAllClassesData] = useState({});
 
   // 학년별 전달사항 (관리자 입력용)
   const [adminGradeAnnInput, setAdminGradeAnnInput] = useState('');
-  const [adminGradeAnnImage, setAdminGradeAnnImage] = useState('');
-  const [gradeImageUploadStatus, setGradeImageUploadStatus] = useState('');
+  const [gradeSendStatus, setGradeSendStatus] = useState('');
+
+  // 전달사항 입력창에 현재 게시된 내용을 최초 1회 자동으로 불러오기 위한 ref
+  const globalAnnSyncedRef = useRef(false);
+  const lastSyncedGradeRef = useRef(null);
 
   const [students, setStudents] = useState([]);
   // 반별 응시 현황 마감 여부
   const [isFinalized, setIsFinalized] = useState(false);
 
-  const [isAnnouncementLocked, setIsAnnouncementLocked] = useState(true);
-  const [showLockModal, setShowLockModal] = useState(false);
+  const [isGlobalAnnLocked, setIsGlobalAnnLocked] = useState(true);
+  const [isGradeAnnLocked, setIsGradeAnnLocked] = useState(true);
+  const [lockModalTarget, setLockModalTarget] = useState(null); // 'global' | 'grade' | null
   const [lockPasswordInput, setLockPasswordInput] = useState('');
   const [lockError, setLockError] = useState('');
   const [sendConfirm, setSendConfirm] = useState(null);
@@ -223,7 +203,6 @@ export default function App() {
           }));
         }
         if (data.globalAnnouncement !== undefined) setGlobalAnnouncement(data.globalAnnouncement);
-        if (data.globalAnnouncementImage !== undefined) setGlobalAnnouncementImage(data.globalAnnouncementImage);
         if (data.studentDirectory) setStudentDirectory(data.studentDirectory);
         if (data.gradeData) {
           setGradeData({ ...makeDefaultGradeData(), ...data.gradeData });
@@ -260,7 +239,8 @@ export default function App() {
         if (docSnap.id.startsWith('class_')) {
           const parts = docSnap.id.split('_');
           if (parts.length === 3) {
-            data[`${parts[1]}-${parts[2]}`] = docSnap.data().students || [];
+            const d = docSnap.data();
+            data[`${parts[1]}-${parts[2]}`] = { students: d.students || [], isFinalized: !!d.isFinalized };
           }
         }
       });
@@ -272,7 +252,7 @@ export default function App() {
   // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
   useEffect(() => {
     setAnnouncementFontSize(22);
-  }, [globalAnnouncement, globalAnnouncementImage, gradeData[localConfig.grade]?.announcement, gradeData[localConfig.grade]?.announcementImage, view]);
+  }, [globalAnnouncement, gradeData[localConfig.grade]?.announcement, view]);
 
   // 컨테이너 크기에 맞춰 점진적으로 폰트 축소
   useEffect(() => {
@@ -289,7 +269,7 @@ export default function App() {
 
     const timerId = setTimeout(checkOverflow, 10);
     return () => clearTimeout(timerId);
-  }, [announcementFontSize, globalAnnouncement, globalAnnouncementImage, gradeData[localConfig.grade]?.announcement, gradeData[localConfig.grade]?.announcementImage, view]);
+  }, [announcementFontSize, globalAnnouncement, gradeData[localConfig.grade]?.announcement, view]);
 
   const studentsWithSeats = useMemo(() => {
     let patched = [...students];
@@ -326,6 +306,22 @@ export default function App() {
 
   const currentGradeData = gradeData[localConfig.grade] || {};
   const currentGradeSchedule = (currentGradeData.schedules && currentGradeData.schedules[globalConfig.day]) || [];
+
+  // 전체 전달사항: 최초 데이터 로드 시 1회 현재 게시 내용을 입력창에 불러옴
+  useEffect(() => {
+    if (!globalAnnSyncedRef.current) {
+      setAdminGlobalAnnInput(globalAnnouncement);
+      globalAnnSyncedRef.current = true;
+    }
+  }, [globalAnnouncement]);
+
+  // 학년별 전달사항: 학년 탭을 전환할 때마다 해당 학년의 현재 게시 내용을 입력창에 불러옴
+  useEffect(() => {
+    if (lastSyncedGradeRef.current !== localConfig.grade) {
+      setAdminGradeAnnInput(gradeData[localConfig.grade]?.announcement || '');
+      lastSyncedGradeRef.current = localConfig.grade;
+    }
+  }, [localConfig.grade, gradeData]);
 
   const usedInOtherDays = useMemo(() => {
     const grade = localConfig.grade;
@@ -366,6 +362,29 @@ export default function App() {
     const classDocId = `class_${localConfig.grade}_${localConfig.class}`;
     const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', classDocId);
     await setDoc(classRef, { isFinalized: newVal }, { merge: true });
+  };
+
+  // 관리자 요약에서 특정 반의 마감 상태를 개별 토글
+  const handleToggleClassFinalize = async (grade, cls, currentVal) => {
+    const newVal = !currentVal;
+    if (!window.confirm(`${grade}학년 ${cls}반을 ${newVal ? '마감' : '마감 취소'} 하시겠습니까?`)) return;
+    const classDocId = `class_${grade}_${cls}`;
+    const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', classDocId);
+    await setDoc(classRef, { isFinalized: newVal }, { merge: true });
+    if (grade === localConfig.grade && String(cls) === String(localConfig.class)) {
+      setIsFinalized(newVal);
+    }
+  };
+
+  // 학년 전체 반을 한번에 마감/마감취소
+  const handleBulkFinalizeGrade = async (grade, value) => {
+    if (!window.confirm(`${grade}학년 전체 반(1~6반)을 ${value ? '일괄 마감' : '일괄 마감 취소'} 하시겠습니까?`)) return;
+    await Promise.all([1,2,3,4,5,6].map(cls => {
+      const classDocId = `class_${grade}_${cls}`;
+      const classRef = doc(db, 'artifacts', appId, 'public', 'data', 'examData', classDocId);
+      return setDoc(classRef, { isFinalized: value }, { merge: true });
+    }));
+    if (grade === localConfig.grade) setIsFinalized(value);
   };
 
   const handleFileUpload = (e) => {
@@ -450,46 +469,19 @@ export default function App() {
 
   const handleApplyGlobalAnnouncement = async () => {
     try {
-      await updateGlobalDoc({ 
-        globalAnnouncement: adminGlobalAnnInput,
-        globalAnnouncementImage: adminGlobalAnnImage
-      });
-      setAdminGlobalAnnInput('');
-      setAdminGlobalAnnImage('');
-      setImageUploadStatus('송출 완료');
-      setTimeout(() => setImageUploadStatus(''), 2000);
+      await updateGlobalDoc({ globalAnnouncement: adminGlobalAnnInput });
+      setGlobalSendStatus('송출 완료');
+      setTimeout(() => setGlobalSendStatus(''), 2000);
     } catch (err) {
       console.error('공지 송출 실패:', err);
-      setImageUploadStatus(`송출 실패: ${err.message}`);
+      setGlobalSendStatus(`송출 실패: ${err.message}`);
     }
   };
 
   const handleDeleteGlobalAnnouncement = async () => {
     if (!window.confirm('전달사항을 삭제하시겠습니까?')) return;
-    await updateGlobalDoc({ globalAnnouncement: '', globalAnnouncementImage: '' });
-  };
-
-  const handleAnnouncementImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setImageUploadStatus('이미지 파일만 가능합니다.');
-      return;
-    }
-    try {
-      setImageUploadStatus('압축 중...');
-      const compressed = await compressImage(file);
-      const sizeKB = Math.round(compressed.length / 1024);
-      if (sizeKB > 700) {
-        setImageUploadStatus(`크기가 너무 큽니다 (${sizeKB}KB). 더 작은 이미지를 사용해주세요.`);
-        return;
-      }
-      setAdminGlobalAnnImage(compressed);
-      setImageUploadStatus(`첨부 완료 (${sizeKB}KB)`);
-    } catch (err) {
-      setImageUploadStatus('이미지 처리 실패');
-    }
-    e.target.value = '';
+    await updateGlobalDoc({ globalAnnouncement: '' });
+    setAdminGlobalAnnInput('');
   };
 
   const handleApplyGradeAnnouncement = async () => {
@@ -497,18 +489,15 @@ export default function App() {
     const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
     if (!newData[grade]) newData[grade] = { schedules: {} };
     newData[grade].announcement = adminGradeAnnInput;
-    newData[grade].announcementImage = adminGradeAnnImage;
     gradeDataRef.current = newData;
     setGradeData(newData);
     try {
       await updateGlobalDoc({ gradeData: newData });
-      setAdminGradeAnnInput('');
-      setAdminGradeAnnImage('');
-      setGradeImageUploadStatus('송출 완료');
-      setTimeout(() => setGradeImageUploadStatus(''), 2000);
+      setGradeSendStatus('송출 완료');
+      setTimeout(() => setGradeSendStatus(''), 2000);
     } catch (err) {
       console.error('학년 공지 송출 실패:', err);
-      setGradeImageUploadStatus(`송출 실패: ${err.message}`);
+      setGradeSendStatus(`송출 실패: ${err.message}`);
     }
   };
 
@@ -518,33 +507,10 @@ export default function App() {
     const newData = JSON.parse(JSON.stringify(gradeDataRef.current));
     if (!newData[grade]) newData[grade] = { schedules: {} };
     newData[grade].announcement = '';
-    newData[grade].announcementImage = '';
     gradeDataRef.current = newData;
     setGradeData(newData);
     await updateGlobalDoc({ gradeData: newData });
-  };
-
-  const handleGradeAnnouncementImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setGradeImageUploadStatus('이미지 파일만 가능합니다.');
-      return;
-    }
-    try {
-      setGradeImageUploadStatus('압축 중...');
-      const compressed = await compressImage(file);
-      const sizeKB = Math.round(compressed.length / 1024);
-      if (sizeKB > 700) {
-        setGradeImageUploadStatus(`크기가 너무 큽니다 (${sizeKB}KB). 더 작은 이미지를 사용해주세요.`);
-        return;
-      }
-      setAdminGradeAnnImage(compressed);
-      setGradeImageUploadStatus(`첨부 완료 (${sizeKB}KB)`);
-    } catch (err) {
-      setGradeImageUploadStatus('이미지 처리 실패');
-    }
-    e.target.value = '';
+    setAdminGradeAnnInput('');
   };
 
   const toggleAbsence = async (id) => {
@@ -627,7 +593,8 @@ export default function App() {
 
   useEffect(() => {
     if (view !== 'admin' || !isAuthenticated) {
-      setIsAnnouncementLocked(true);
+      setIsGlobalAnnLocked(true);
+      setIsGradeAnnLocked(true);
     }
   }, [view, isAuthenticated]);
 
@@ -639,9 +606,11 @@ export default function App() {
 
   const handleUnlockSubmit = (e) => {
     e.preventDefault();
-    if (lockPasswordInput === ANNOUNCEMENT_LOCK_PASSWORD) {
-      setIsAnnouncementLocked(false);
-      setShowLockModal(false);
+    const expectedPassword = lockModalTarget === 'grade' ? GRADE_ANNOUNCEMENT_LOCK_PASSWORD : GLOBAL_ANNOUNCEMENT_LOCK_PASSWORD;
+    if (lockPasswordInput === expectedPassword) {
+      if (lockModalTarget === 'grade') setIsGradeAnnLocked(false);
+      else setIsGlobalAnnLocked(false);
+      setLockModalTarget(null);
       setLockPasswordInput('');
       setLockError('');
     } else {
@@ -829,31 +798,23 @@ export default function App() {
         <div className="col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-full">
           <h3 className="font-bold text-slate-400 text-xs flex items-center gap-1.5 uppercase tracking-widest mb-3 shrink-0"><AlertCircle size={16}/> 전달사항</h3>
           <div className="flex flex-col gap-3 flex-1 overflow-hidden pr-2 min-h-0">
-            {(globalAnnouncement || globalAnnouncementImage) ? (
+            {globalAnnouncement ? (
               <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm flex-1 flex flex-col min-h-0">
-                {globalAnnouncement && (
-                  <p 
-                    ref={announcementTextRef} 
-                    style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} 
-                    className="font-black text-slate-800 break-keep whitespace-pre-wrap flex-1 overflow-hidden min-h-0"
-                  >
-                    {globalAnnouncement}
-                  </p>
-                )}
-                {globalAnnouncementImage && (
-                  <img src={globalAnnouncementImage} alt="공지 이미지" onClick={() => setImageModalUrl(globalAnnouncementImage)} className="max-h-52 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-3 bg-white/50 p-1 shrink-0" />
-                )}
+                <p 
+                  ref={announcementTextRef} 
+                  style={{ fontSize: `${announcementFontSize}px`, lineHeight: 1.4 }} 
+                  className="font-black text-slate-800 break-keep whitespace-pre-wrap flex-1 overflow-hidden min-h-0"
+                >
+                  {globalAnnouncement}
+                </p>
               </div>
             ) : (
               <p className="text-center text-slate-400 text-sm font-bold m-auto">등록된 전달사항이 없습니다.</p>
             )}
-            {(currentGradeData.announcement || currentGradeData.announcementImage) && (
+            {currentGradeData.announcement && (
               <div className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm shrink-0 max-h-[38%] overflow-auto">
                 <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-1">{localConfig.grade}학년 전달사항</p>
                 <p className="text-sm font-bold text-slate-800 whitespace-pre-wrap break-keep">{currentGradeData.announcement}</p>
-                {currentGradeData.announcementImage && (
-                  <img src={currentGradeData.announcementImage} alt="학년 공지 이미지" onClick={() => setImageModalUrl(currentGradeData.announcementImage)} className="max-h-32 w-full object-contain rounded-md cursor-zoom-in shadow-sm ring-1 ring-slate-200 mt-2 bg-white/50 p-1" />
-                )}
               </div>
             )}
           </div>
@@ -1027,91 +988,113 @@ export default function App() {
       </section>
 
       <section className="flex flex-col gap-6 pb-12">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <h2 className="font-black text-xl tracking-tight">4. 실시간 전달사항 송출</h2>
-          {isAnnouncementLocked ? (
-            <button onClick={() => { setLockPasswordInput(''); setLockError(''); setShowLockModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200 transition-colors ring-1 ring-slate-200"><Lock size={14} /> 잠금 (해제하려면 클릭)</button>
-          ) : (
-            <button onClick={() => setIsAnnouncementLocked(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"><Unlock size={14} /> 잠금 해제됨 · 다시 잠그기</button>
-          )}
-        </div>
+        <h2 className="font-black text-xl tracking-tight border-b border-slate-100 pb-4">4. 실시간 전달사항 송출</h2>
 
-        {isAnnouncementLocked && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-700 flex items-center gap-2"><Lock size={14} /> 전달사항 송출·삭제·이미지 첨부는 잠금 해제 후 가능합니다. 우측 상단 자물쇠를 클릭하여 해제하세요.</div>
-        )}
-
-        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner mt-2">
+        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-slate-800 font-black text-sm uppercase">전달사항 작성</h3>
-            <button onClick={handleDeleteGlobalAnnouncement} disabled={isAnnouncementLocked || (!globalAnnouncement && !globalAnnouncementImage)} className="text-red-500 hover:text-red-700 font-black text-xs disabled:opacity-50 flex items-center gap-1">
+            <h3 className="text-slate-800 font-black text-sm uppercase">전체 전달사항</h3>
+            <div className="flex items-center gap-2">
+              {isGlobalAnnLocked ? (
+                <button onClick={() => { setLockPasswordInput(''); setLockError(''); setLockModalTarget('global'); }} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-black hover:bg-slate-200 transition-colors ring-1 ring-slate-200"><Lock size={13} /> 잠금 (해제하려면 클릭)</button>
+              ) : (
+                <button onClick={() => setIsGlobalAnnLocked(true)} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-black hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"><Unlock size={13} /> 잠금 해제됨 · 다시 잠그기</button>
+              )}
+            </div>
+          </div>
+
+          {isGlobalAnnLocked && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-700 flex items-center gap-2 mb-4"><Lock size={14} /> 송출·삭제는 잠금 해제 후 가능합니다.</div>
+          )}
+
+          <div className="flex justify-between items-center mb-2">
+            <button onClick={() => setAdminGlobalAnnInput(globalAnnouncement)} className="text-blue-500 hover:text-blue-700 font-black text-xs flex items-center gap-1">현재 게시 내용 불러오기</button>
+            <button onClick={handleDeleteGlobalAnnouncement} disabled={isGlobalAnnLocked || !globalAnnouncement} className="text-red-500 hover:text-red-700 font-black text-xs disabled:opacity-50 flex items-center gap-1">
               <Trash2 size={14} /> 현재 전달사항 삭제
             </button>
           </div>
-          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} disabled={isAnnouncementLocked} className={`w-full border border-slate-200 p-4 rounded-xl h-32 mb-4 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm transition-colors ${isAnnouncementLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`} placeholder={isAnnouncementLocked ? '잠금 해제 후 입력 가능합니다.' : '모든 학년에 공통으로 표시될 전달사항을 입력하세요.'} />
-          
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4 flex items-center gap-4">
-            <ImageIcon size={20} className="text-slate-400" />
-            <input type="file" accept="image/*" onChange={handleAnnouncementImageUpload} disabled={isAnnouncementLocked} className={`block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${isAnnouncementLocked ? 'text-slate-300 file:bg-slate-100 file:text-slate-400 cursor-not-allowed' : 'text-slate-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'}`} />
-            {adminGlobalAnnImage && (
-              <button onClick={() => { setAdminGlobalAnnImage(''); setImageUploadStatus(''); }} disabled={isAnnouncementLocked} className="text-red-500 hover:text-red-700 font-black text-xs whitespace-nowrap">
-                이미지 제거
-              </button>
-            )}
-          </div>
-          {imageUploadStatus && <p className="mb-4 text-blue-600 font-black text-sm">{imageUploadStatus}</p>}
+          <textarea value={adminGlobalAnnInput} onChange={(e) => setAdminGlobalAnnInput(e.target.value)} disabled={isGlobalAnnLocked} className={`w-full border border-slate-200 p-4 rounded-xl h-32 mb-4 outline-none focus:ring-2 focus:ring-blue-400 font-bold shadow-sm transition-colors ${isGlobalAnnLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`} placeholder={isGlobalAnnLocked ? '잠금 해제 후 입력 가능합니다.' : '모든 학년에 공통으로 표시될 전달사항을 입력하세요.'} />
 
-          <button onClick={() => setSendConfirm({ type: 'global' })} disabled={isAnnouncementLocked || (!adminGlobalAnnInput.trim() && !adminGlobalAnnImage)} className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isAnnouncementLocked || (!adminGlobalAnnInput.trim() && !adminGlobalAnnImage)) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-[0.98]'}`}>{isAnnouncementLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> 전체 송출 (잠김)</span> : '전체 송출'}</button>
+          {globalSendStatus && <p className="mb-4 text-blue-600 font-black text-sm">{globalSendStatus}</p>}
+
+          <button onClick={() => setSendConfirm({ type: 'global' })} disabled={isGlobalAnnLocked || !adminGlobalAnnInput.trim()} className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isGlobalAnnLocked || !adminGlobalAnnInput.trim()) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-[0.98]'}`}>{isGlobalAnnLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> 전체 송출 (잠김)</span> : '전체 송출'}</button>
         </div>
 
         <div className="p-8 bg-slate-50 rounded-3xl border border-slate-200 shadow-inner">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-slate-800 font-black text-sm uppercase">학년별 전달사항 · {localConfig.grade}학년 대상</h3>
-            <button onClick={handleDeleteGradeAnnouncement} disabled={isAnnouncementLocked || (!currentGradeData.announcement && !currentGradeData.announcementImage)} className="text-red-500 hover:text-red-700 font-black text-xs disabled:opacity-50 flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              {isGradeAnnLocked ? (
+                <button onClick={() => { setLockPasswordInput(''); setLockError(''); setLockModalTarget('grade'); }} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-black hover:bg-slate-200 transition-colors ring-1 ring-slate-200"><Lock size={13} /> 잠금 (해제하려면 클릭)</button>
+              ) : (
+                <button onClick={() => setIsGradeAnnLocked(true)} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-black hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"><Unlock size={13} /> 잠금 해제됨 · 다시 잠그기</button>
+              )}
+            </div>
+          </div>
+
+          {isGradeAnnLocked && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-700 flex items-center gap-2 mb-4"><Lock size={14} /> 송출·삭제는 잠금 해제 후 가능합니다.</div>
+          )}
+
+          <p className="text-xs text-slate-400 font-bold mb-3">※ 상단 시험 시간표 설정의 학년 탭과 동일한 학년을 대상으로 합니다.</p>
+          <div className="flex justify-between items-center mb-2">
+            <button onClick={() => setAdminGradeAnnInput(currentGradeData.announcement || '')} className="text-purple-500 hover:text-purple-700 font-black text-xs flex items-center gap-1">현재 게시 내용 불러오기</button>
+            <button onClick={handleDeleteGradeAnnouncement} disabled={isGradeAnnLocked || !currentGradeData.announcement} className="text-red-500 hover:text-red-700 font-black text-xs disabled:opacity-50 flex items-center gap-1">
               <Trash2 size={14} /> 현재 {localConfig.grade}학년 전달사항 삭제
             </button>
           </div>
-          <p className="text-xs text-slate-400 font-bold mb-4">※ 상단 시험 시간표 설정의 학년 탭과 동일한 학년을 대상으로 합니다.</p>
-          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} disabled={isAnnouncementLocked} className={`w-full border border-slate-200 p-4 rounded-xl h-24 mb-4 outline-none focus:ring-2 focus:ring-purple-400 font-bold shadow-sm transition-colors ${isAnnouncementLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`} placeholder={isAnnouncementLocked ? '잠금 해제 후 입력 가능합니다.' : `${localConfig.grade}학년에만 표시될 전달사항을 입력하세요.`} />
+          <textarea value={adminGradeAnnInput} onChange={(e) => setAdminGradeAnnInput(e.target.value)} disabled={isGradeAnnLocked} className={`w-full border border-slate-200 p-4 rounded-xl h-24 mb-4 outline-none focus:ring-2 focus:ring-purple-400 font-bold shadow-sm transition-colors ${isGradeAnnLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800'}`} placeholder={isGradeAnnLocked ? '잠금 해제 후 입력 가능합니다.' : `${localConfig.grade}학년에만 표시될 전달사항을 입력하세요.`} />
 
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4 flex items-center gap-4">
-            <ImageIcon size={20} className="text-slate-400" />
-            <input type="file" accept="image/*" onChange={handleGradeAnnouncementImageUpload} disabled={isAnnouncementLocked} className={`block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${isAnnouncementLocked ? 'text-slate-300 file:bg-slate-100 file:text-slate-400 cursor-not-allowed' : 'text-slate-500 file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100'}`} />
-            {adminGradeAnnImage && (
-              <button onClick={() => { setAdminGradeAnnImage(''); setGradeImageUploadStatus(''); }} disabled={isAnnouncementLocked} className="text-red-500 hover:text-red-700 font-black text-xs whitespace-nowrap">
-                이미지 제거
-              </button>
-            )}
-          </div>
-          {gradeImageUploadStatus && <p className="mb-4 text-purple-600 font-black text-sm">{gradeImageUploadStatus}</p>}
+          {gradeSendStatus && <p className="mb-4 text-purple-600 font-black text-sm">{gradeSendStatus}</p>}
 
-          <button onClick={() => setSendConfirm({ type: 'grade' })} disabled={isAnnouncementLocked || (!adminGradeAnnInput.trim() && !adminGradeAnnImage)} className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isAnnouncementLocked || (!adminGradeAnnInput.trim() && !adminGradeAnnImage)) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white active:scale-[0.98]'}`}>{isAnnouncementLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> {localConfig.grade}학년 송출 (잠김)</span> : `${localConfig.grade}학년 송출`}</button>
+          <button onClick={() => setSendConfirm({ type: 'grade' })} disabled={isGradeAnnLocked || !adminGradeAnnInput.trim()} className={`w-full font-black py-4 rounded-xl shadow-lg transition-all ${(isGradeAnnLocked || !adminGradeAnnInput.trim()) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white active:scale-[0.98]'}`}>{isGradeAnnLocked ? <span className="inline-flex items-center gap-2"><Lock size={14}/> {localConfig.grade}학년 송출 (잠김)</span> : `${localConfig.grade}학년 송출`}</button>
         </div>
       </section>
 
       <section className="pb-12">
-        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight">5. 전체 학반 결시생 현황 요약</h2>
+        <h2 className="font-black border-b border-slate-100 pb-4 mb-6 text-xl tracking-tight">5. 전체 학반 결시생 현황 · 마감 현황 요약</h2>
         <div className="grid grid-cols-3 gap-5">
           {['1','2','3'].map(grade => {
             const gradeTotal = [1,2,3,4,5,6].reduce((sum, cls) => {
-              const list = allClassesData[`${grade}-${cls}`] || [];
+              const list = allClassesData[`${grade}-${cls}`]?.students || [];
               return sum + list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason)).length;
             }, 0);
+            const finalizedCount = [1,2,3,4,5,6].filter(cls => allClassesData[`${grade}-${cls}`]?.isFinalized).length;
             return (
               <div key={grade} className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-                <div className="flex justify-between items-baseline mb-4 pb-3 border-b border-slate-200">
+                <div className="flex justify-between items-baseline mb-2 pb-3 border-b border-slate-200">
                   <h3 className="font-black text-lg text-slate-800">{grade}학년</h3>
                   <span className={`text-sm font-black px-3 py-1 rounded-full ${gradeTotal > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>{gradeTotal}명 결시</span>
+                </div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-full ring-1 ${finalizedCount === 6 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : finalizedCount === 0 ? 'bg-slate-100 text-slate-400 ring-slate-200' : 'bg-amber-100 text-amber-700 ring-amber-200'}`}>마감 {finalizedCount}/6반</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => handleBulkFinalizeGrade(grade, true)} className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-800 text-white hover:bg-slate-700 flex items-center gap-1"><Lock size={10}/> 일괄 마감</button>
+                    <button onClick={() => handleBulkFinalizeGrade(grade, false)} className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 flex items-center gap-1"><Unlock size={10}/> 일괄 마감취소</button>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   {[1,2,3,4,5,6].map(cls => {
                     const key = `${grade}-${cls}`;
-                    const list = allClassesData[key] || [];
+                    const list = allClassesData[key]?.students || [];
+                    const classFinalized = !!allClassesData[key]?.isFinalized;
                     const absent = list.filter(s => s.isAbsent && !['전출','위탁'].includes(s.absenceReason));
                     return (
                       <div key={cls} className={`p-3 rounded-xl border transition-colors ${absent.length > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`}>
                         <div className="flex justify-between items-center">
-                          <span className="font-black text-slate-700 text-sm">{cls}반</span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${absent.length > 0 ? 'bg-red-200 text-red-700' : 'bg-slate-100 text-slate-400'}`}>{absent.length}명</span>
+                          <span className="font-black text-slate-700 text-sm flex items-center gap-1.5">
+                            {cls}반
+                            {classFinalized && <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full ring-1 ring-emerald-200">마감</span>}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${absent.length > 0 ? 'bg-red-200 text-red-700' : 'bg-slate-100 text-slate-400'}`}>{absent.length}명</span>
+                            <button
+                              onClick={() => handleToggleClassFinalize(grade, cls, classFinalized)}
+                              title={classFinalized ? '마감 취소' : '마감'}
+                              className={`p-1 rounded-md ring-1 ${classFinalized ? 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100' : 'bg-slate-800 text-white ring-slate-800 hover:bg-slate-700'}`}
+                            >
+                              {classFinalized ? <Unlock size={11}/> : <Lock size={11}/>}
+                            </button>
+                          </div>
                         </div>
                         {absent.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
@@ -1196,19 +1179,19 @@ export default function App() {
       )}
       
       {/* 전달사항 잠금 모달 */}
-      {showLockModal && (
+      {lockModalTarget && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[2.5rem] p-12 w-full max-w-sm shadow-2xl border border-white">
             <div className="flex justify-center mb-6">
               <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center ring-1 ring-amber-100"><Lock size={28} className="text-amber-600" /></div>
             </div>
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight text-center mb-2">공지 잠금 해제</h3>
-            <p className="text-xs text-slate-400 text-center mb-8 font-bold">송출·삭제·이미지 첨부를 위해 인증이 필요합니다</p>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight text-center mb-2">{lockModalTarget === 'grade' ? '학년별 전달사항 잠금 해제' : '전체 전달사항 잠금 해제'}</h3>
+            <p className="text-xs text-slate-400 text-center mb-8 font-bold">송출·삭제를 위해 인증이 필요합니다</p>
             <form onSubmit={handleUnlockSubmit} className="flex flex-col gap-6">
               <input type="password" value={lockPasswordInput} onChange={(e) => setLockPasswordInput(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl tracking-[0.5em] outline-none focus:border-amber-500 focus:bg-white transition-all text-slate-800 font-black shadow-inner" placeholder="••••" autoFocus />
               {lockError && <p className="text-red-500 text-center font-black animate-bounce text-sm">{lockError}</p>}
               <button type="submit" className="w-full bg-amber-500 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">잠금 해제</button>
-              <button type="button" onClick={() => { setShowLockModal(false); setLockPasswordInput(''); setLockError(''); }} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">취소</button>
+              <button type="button" onClick={() => { setLockModalTarget(null); setLockPasswordInput(''); setLockError(''); }} className="text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest mt-2">취소</button>
             </form>
           </div>
         </div>
@@ -1226,9 +1209,6 @@ export default function App() {
             </h3>
             <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-200 max-h-40 overflow-auto">
               <p className="text-sm font-bold text-slate-700 whitespace-pre-wrap break-keep">{sendConfirm.type === 'grade' ? adminGradeAnnInput : adminGlobalAnnInput}</p>
-              {(sendConfirm.type === 'grade' ? adminGradeAnnImage : adminGlobalAnnImage) && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 font-black"><ImageIcon size={12} /> 이미지 1장 포함</div>
-              )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setSendConfirm(null)} className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black hover:bg-slate-200 transition-colors">취소</button>
@@ -1238,14 +1218,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 이미지 확대 모달 */}
-      {imageModalUrl && (
-        <div onClick={() => setImageModalUrl(null)} className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-50 p-8 cursor-zoom-out">
-          <img src={imageModalUrl} alt="확대" className="max-w-full max-h-full rounded-2xl shadow-2xl" />
-          <button onClick={(e) => { e.stopPropagation(); setImageModalUrl(null); }} className="absolute top-8 right-8 bg-white/10 hover:bg-white/20 text-white p-3 rounded-full"><X size={28} /></button>
-        </div>
-      )}
-      
       {isSyncing && <div className="fixed bottom-10 right-10 bg-white/90 backdrop-blur-xl px-6 py-3 rounded-full border border-slate-200 shadow-2xl text-[10px] font-black flex items-center gap-3 text-blue-600 animate-pulse ring-4 ring-blue-50"><Cloud size={14}/> 실시간 동기화 중</div>}
     </div>
   );
