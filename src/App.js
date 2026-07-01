@@ -125,6 +125,9 @@ export default function App() {
   // 전달사항 폰트 크기 자동 조절 상태 (기본 22px)
   const [announcementFontSize, setAnnouncementFontSize] = useState(22);
   const announcementTextRef = useRef(null);
+  // 학년별 전달사항 전용 폰트 크기 자동 조절 (전체 공지와 독립적으로 계산)
+  const [gradeAnnouncementFontSize, setGradeAnnouncementFontSize] = useState(20);
+  const gradeAnnouncementTextRef = useRef(null);
 
   // ==========================================
   // 화면꺼짐 방지 (Wake Lock) - 자동 작동
@@ -252,7 +255,7 @@ export default function App() {
   // 공지가 변경되거나 뷰가 바뀔 때 폰트 크기를 초기화
   useEffect(() => {
     setAnnouncementFontSize(22);
-  }, [globalAnnouncement, gradeData[localConfig.grade]?.announcement, view]);
+  }, [globalAnnouncement, view]);
 
   // 컨테이너 크기에 맞춰 점진적으로 폰트 축소
   useEffect(() => {
@@ -269,7 +272,28 @@ export default function App() {
 
     const timerId = setTimeout(checkOverflow, 10);
     return () => clearTimeout(timerId);
-  }, [announcementFontSize, globalAnnouncement, gradeData[localConfig.grade]?.announcement, view]);
+  }, [announcementFontSize, globalAnnouncement, view]);
+
+  // 학년별 전달사항: 내용이 바뀌거나 뷰가 바뀔 때 폰트 크기 초기화 (전체 공지와 무관하게 독립 계산)
+  useEffect(() => {
+    setGradeAnnouncementFontSize(20);
+  }, [gradeData[localConfig.grade]?.announcement, localConfig.grade, view]);
+
+  useEffect(() => {
+    if (view !== 'dashboard' || !gradeData[localConfig.grade]?.announcement) return;
+
+    const checkGradeOverflow = () => {
+      const textEl = gradeAnnouncementTextRef.current;
+      if (!textEl) return;
+
+      if (textEl.scrollHeight > textEl.clientHeight && gradeAnnouncementFontSize > 14) {
+        setGradeAnnouncementFontSize(prev => prev - 1);
+      }
+    };
+
+    const timerId = setTimeout(checkGradeOverflow, 10);
+    return () => clearTimeout(timerId);
+  }, [gradeAnnouncementFontSize, gradeData, localConfig.grade, view]);
 
   const studentsWithSeats = useMemo(() => {
     let patched = [...students];
@@ -812,8 +836,14 @@ export default function App() {
               <p className="flex-[3] flex items-center justify-center text-center text-slate-400 text-sm font-bold min-h-0">등록된 전달사항이 없습니다.</p>
             )}
             {currentGradeData.announcement && (
-              <div className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm flex-[2] overflow-auto min-h-0 flex items-center">
-                <p style={{ fontSize: `${Math.round(announcementFontSize * 0.75)}px`, lineHeight: 1.4 }} className="font-black text-slate-800 whitespace-pre-wrap break-keep">{currentGradeData.announcement}</p>
+              <div className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm flex-[2] flex flex-col min-h-0">
+                <p 
+                  ref={gradeAnnouncementTextRef}
+                  style={{ fontSize: `${gradeAnnouncementFontSize}px`, lineHeight: 1.4 }} 
+                  className="font-black text-slate-800 whitespace-pre-wrap break-keep flex-1 overflow-hidden min-h-0"
+                >
+                  {currentGradeData.announcement}
+                </p>
               </div>
             )}
           </div>
